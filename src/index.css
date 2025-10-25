@@ -92,7 +92,8 @@
   --font-sans: Poppins, sans-serif;
   --font-serif: Libre Baskerville, serif;
   --font-mono: IBM Plex Mono, monospace;
-  --radius: 0.375rem;
+  /* Border radius global de 8px según requisitos */
+  --radius: 0.5rem;
   --shadow-x: 1px;
   --shadow-y: 1px;
   --shadow-blur: 16px;

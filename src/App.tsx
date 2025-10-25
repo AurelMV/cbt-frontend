@@ -1,11 +1,8 @@
-import './App.css'
-import Page from './app/dashboard/page'
+import "./App.css"
+import { AppRoutes } from "@/app/routes"
 
 function App() {
-
-  return (
-    <Page />
-  )
+  return <AppRoutes />
 }
 
 export default App
