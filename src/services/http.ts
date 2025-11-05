@@ -9,13 +9,18 @@ export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
 
 export async function http<T>(path: string, opts?: { method?: HttpMethod; body?: unknown; headers?: Record<string, string> }) {
   const url = `${BASE}${path}`
+  const method = opts?.method ?? "GET"
+  const hasBody = opts?.body != null
+  const headers: Record<string, string> = {
+    ...(opts?.headers ?? {}),
+  }
+  // Importante para CORS: no enviar Content-Type en GET (evita preflight innecesario)
+  if (hasBody) headers["Content-Type"] = "application/json"
+
   const res = await fetch(url, {
-    method: opts?.method ?? "GET",
-    headers: {
-      "Content-Type": "application/json",
-      ...(opts?.headers ?? {}),
-    },
-    body: opts?.body != null ? JSON.stringify(opts.body) : undefined,
+    method,
+    headers,
+    body: hasBody ? JSON.stringify(opts!.body) : undefined,
   })
 
   const text = await res.text()

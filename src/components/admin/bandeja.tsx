@@ -1,45 +1,17 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
+import { aprobarPago as apiAprobarPago, aprobarPreinscripcion as apiAprobarPre, getCounts, listPagosPendientes, listPreinsPendientes, rechazarPago as apiRechazarPago, rechazarPreinscripcion as apiRechazarPre, type BandejaPagoItem, type BandejaPreItem } from "@/services/bandeja"
+import { getCiclos } from "@/services/ciclos"
+import { api } from "@/services/http"
 
-// Tipos locales usados por la bandeja (mock)
-type EstadoInscripcion = "pendiente" | "aprobado" | "rechazado"
-type Acceso = "habilitado" | "bloqueado"
-type Inscrito = {
-  id: string
-  ciclo: string
-  nombre: string
-  dni: string
-  email: string
-  programa: string
-  grupo?: string
-  clase?: string
-  estado: EstadoInscripcion
-  acceso: Acceso
-  evidenciaUrl?: string
-}
-
-type EstadoPago = "pendiente" | "aprobado" | "rechazado"
-type Pago = { id: string; ciclo: string; dni: string; nombre: string; monto: number; fecha: string; banco: string; comprobante: string; estado: EstadoPago }
-
-// Datos mock separados para la bandeja (demostración)
-const MOCK_INSCRITOS: Inscrito[] = [
-  { id: "I-001", ciclo: "2025-2", nombre: "Ana Pérez", dni: "12345678", email: "ana@example.com", programa: "Programa 1", grupo: "", clase: "", estado: "pendiente", acceso: "habilitado", evidenciaUrl: "" },
-  { id: "I-002", ciclo: "2025-2", nombre: "Juan Díaz", dni: "87654321", email: "juan@example.com", programa: "Programa 2", grupo: "", clase: "", estado: "pendiente", acceso: "habilitado", evidenciaUrl: "" },
-  { id: "I-010", ciclo: "2025-1", nombre: "María López", dni: "11223344", email: "maria@example.com", programa: "Programa 1", grupo: "A", clase: "101", estado: "rechazado", acceso: "bloqueado" },
-]
-
-const MOCK_PAGOS: Pago[] = [
-  { id: "P-901", ciclo: "2025-2", dni: "12345678", nombre: "Ana Pérez", monto: 150, fecha: "2025-10-20", banco: "BCP", comprobante: "C-1001", estado: "pendiente" },
-  { id: "P-902", ciclo: "2025-2", dni: "87654321", nombre: "Juan Díaz", monto: 200, fecha: "2025-10-21", banco: "BBVA", comprobante: "C-1002", estado: "pendiente" },
-  { id: "P-800", ciclo: "2025-1", dni: "11223344", nombre: "María López", monto: 180, fecha: "2025-05-21", banco: "Interbank", comprobante: "C-9988", estado: "aprobado" },
-]
+type Grupo = { id: number; nombreGrupo: string; ciclo_id: number }
+type Clase = { id: number; codigoClase: string; grupo_id: number }
 
 type ButtonVariant = "default" | "secondary" | "destructive" | "ghost" | "link" | "outline"
 type ButtonSize = "default" | "sm" | "lg" | "icon"
@@ -62,36 +34,65 @@ export function BandejaButton({
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState("inscripciones")
 
-  // Estados locales de mock (independientes de las tablas principales)
-  const [inscripciones, setInscripciones] = useState<Inscrito[]>(MOCK_INSCRITOS)
-  const [pagos, setPagos] = useState<Pago[]>(MOCK_PAGOS)
+  // Datos reales desde backend
+  const [inscripciones, setInscripciones] = useState<BandejaPreItem[]>([])
+  const [pagos, setPagos] = useState<BandejaPagoItem[]>([])
+  const [counts, setCounts] = useState<{ pre: number; pay: number }>({ pre: 0, pay: 0 })
+  const [grupos, setGrupos] = useState<Grupo[]>([])
+  const [clases, setClases] = useState<Clase[]>([])
+  const [selGrupoByPre, setSelGrupoByPre] = useState<Record<number, number | undefined>>({})
+  const [selClaseByPre, setSelClaseByPre] = useState<Record<number, number | undefined>>({})
+  const [ciclos, setCiclos] = useState<Array<{ id: number; nombreCiclo: string }>>([])
 
   const [cicloFiltroPagos, setCicloFiltroPagos] = useState<string>("all")
-  const pendientes = useMemo(() => inscripciones.filter(i => i.estado === "pendiente"), [inscripciones])
+  const cicloNombre = useMemo(() => Object.fromEntries(ciclos.map(c => [c.id, c.nombreCiclo])), [ciclos])
   const pagosFiltrados = useMemo(() => pagos
-    .filter(p => cicloFiltroPagos === "all" || p.ciclo === cicloFiltroPagos)
-    .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()), [pagos, cicloFiltroPagos])
-  const pendingInsCount = pendientes.length
-  const pendingPayCount = pagos.filter(p => p.estado === "pendiente").length
+    .filter(p => cicloFiltroPagos === "all" || (p.inscripcion?.idCiclo && String(p.inscripcion.idCiclo) === cicloFiltroPagos))
+    .sort((a, b) => new Date(b.pago.fecha).getTime() - new Date(a.pago.fecha).getTime()), [pagos, cicloFiltroPagos])
+  const pendingInsCount = counts.pre
+  const pendingPayCount = counts.pay
   const totalPending = pendingInsCount + pendingPayCount
 
-  const aprobarInscripcion = (id: string, email: string) => {
-    setInscripciones(prev => prev.map(i => i.id === id ? { ...i, estado: "aprobado", acceso: "habilitado" } : i))
-    toast.success("Inscripción aprobada", { description: `Se envió un correo de confirmación a ${email}` })
-  }
-  const rechazarInscripcion = (id: string, email: string) => {
-    setInscripciones(prev => prev.map(i => i.id === id ? { ...i, estado: "rechazado" } : i))
-    toast.error("Inscripción rechazada", { description: `Se envió un correo de rechazo a ${email}` })
+  const reloadAll = async () => {
+    try {
+      const [c, pre, pay, cg, cc, ci] = await Promise.all([
+        getCounts(),
+        listPreinsPendientes(),
+        listPagosPendientes(),
+        api.get<Grupo[]>("/grupos/"),
+        api.get<Clase[]>("/clases/"),
+        getCiclos(),
+      ])
+      setCounts({ pre: c.preinscripcionesPendientes, pay: c.pagosPendientes })
+      setInscripciones(pre)
+      setPagos(pay)
+      setGrupos(cg)
+      setClases(cc)
+      setCiclos(ci)
+    } catch {
+      // noop
+    }
   }
 
-  const aprobarPago = (id: string, nombre: string) => {
-    setPagos(prev => prev.map(p => p.id === id ? { ...p, estado: "aprobado" } : p))
-    // Simulación: matrícula actualizada automáticamente
-    toast.success("Pago aprobado", { description: `La matrícula de ${nombre} fue actualizada automáticamente` })
+  useEffect(() => { if (open) reloadAll() }, [open])
+
+  const aprobarInscripcion = async (preId: number, idGrupo: number | undefined, idClase: number | undefined) => {
+    try {
+      if (!idGrupo || !idClase) { toast.error("Falta seleccionar grupo y clase"); return }
+      await apiAprobarPre(preId, { idGrupo, idClase })
+      toast.success("Inscripción aprobada")
+      await reloadAll()
+    } catch { toast.error("No se pudo aprobar la inscripción") }
   }
-  const desaprobarPago = (id: string) => {
-    setPagos(prev => prev.map(p => p.id === id ? { ...p, estado: "rechazado" } : p))
-    toast.error("Pago desaprobado", { description: `El registro fue marcado como rechazado` })
+  const rechazarInscripcion = async (preId: number) => {
+    try { await apiRechazarPre(preId); toast.success("Inscripción rechazada"); await reloadAll() } catch { toast.error("No se pudo rechazar") }
+  }
+
+  const aprobarPago = async (id: number, nombre?: string) => {
+    try { await apiAprobarPago(id); toast.success("Pago aprobado", { description: nombre ? `De ${nombre}` : undefined }); await reloadAll() } catch { toast.error("No se pudo aprobar el pago") }
+  }
+  const desaprobarPago = async (id: number) => {
+    try { await apiRechazarPago(id); toast.success("Pago rechazado"); await reloadAll() } catch { toast.error("No se pudo rechazar el pago") }
   }
 
   return (
@@ -129,7 +130,7 @@ export function BandejaButton({
             </TabsList>
 
             <TabsContent value="inscripciones" className="mt-4 space-y-3">
-              {pendientes.length === 0 ? (
+              {inscripciones.length === 0 ? (
                 <div className="text-sm text-muted-foreground">No hay inscripciones pendientes.</div>
               ) : (
                 <Table>
@@ -139,57 +140,107 @@ export function BandejaButton({
                       <TableHead>DNI</TableHead>
                       <TableHead>Ciclo</TableHead>
                       <TableHead>Programa</TableHead>
-                      <TableHead>Grupo</TableHead>
-                      <TableHead>Clase</TableHead>
                       <TableHead>Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pendientes.map(item => (
-                      <TableRow key={item.id}>
-                        <TableCell>{item.nombre}</TableCell>
-                        <TableCell>{item.dni}</TableCell>
-                        <TableCell>
-                          <Select value={item.ciclo} onValueChange={(val) => setInscripciones(prev => prev.map(x => x.id === item.id ? { ...x, ciclo: val } : x))}>
-                            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="2025-1">2025-1</SelectItem>
-                              <SelectItem value="2025-2">2025-2</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>{item.programa}</TableCell>
-                        <TableCell>
-                          <Input value={item.grupo || ""} onChange={(e) => setInscripciones(prev => prev.map(x => x.id === item.id ? { ...x, grupo: e.target.value } : x))} className="w-24" />
-                        </TableCell>
-                        <TableCell>
-                          <Input value={item.clase || ""} onChange={(e) => setInscripciones(prev => prev.map(x => x.id === item.id ? { ...x, clase: e.target.value } : x))} className="w-24" />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
+                    {inscripciones.map(({ preinscripcion: pre, prepagos }) => {
+                      const gruposCiclo = grupos.filter(g => g.ciclo_id === pre.idCiclo)
+                      const selGrupo = selGrupoByPre[pre.id]
+                      const clasesGrupo = clases.filter(c => c.grupo_id === (selGrupo ?? -1))
+                      const selClase = selClaseByPre[pre.id]
+                      return (
+                        <TableRow key={pre.id}>
+                          <TableCell>{pre.nombreAlumno} {pre.aPaterno} {pre.aMaterno}</TableCell>
+                          <TableCell>{pre.nroDocumento}</TableCell>
+                          <TableCell>{cicloNombre[pre.idCiclo] ?? pre.idCiclo}</TableCell>
+                          <TableCell>{pre.idPrograma}</TableCell>
+                          <TableCell>
                             <Sheet>
                               <SheetTrigger asChild>
-                                <Button size="sm" variant="outline">Revisar</Button>
+                                <Button size="sm" variant="outline">Ver detalles</Button>
                               </SheetTrigger>
-                              <SheetContent side="right" className="w-full sm:max-w-md">
+                              <SheetContent side="right" className="w-full sm:max-w-lg">
                                 <SheetHeader>
-                                  <SheetTitle>Inscripción {item.id}</SheetTitle>
+                                  <SheetTitle>Revisión de preinscripción #{pre.id}</SheetTitle>
                                 </SheetHeader>
-                                <div className="p-4 space-y-3 text-sm">
-                                  <div><strong>Estudiante:</strong> {item.nombre} ({item.dni})</div>
-                                  <div><strong>Email:</strong> {item.email}</div>
-                                  <div><strong>Programa:</strong> {item.programa}</div>
-                                  <div><strong>Ciclo:</strong> {item.ciclo}</div>
-                                  <div><strong>Evidencia de pago:</strong> <span className="text-muted-foreground">No disponible en mock</span></div>
+                                <div className="p-4 space-y-4 text-sm overflow-y-auto h-[calc(100vh-8rem)]">
+                                  <div className="grid grid-cols-1 gap-2">
+                                    <div><strong>Estudiante:</strong> {pre.nombreAlumno} {pre.aPaterno} {pre.aMaterno}</div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div><strong>DNI:</strong> {pre.nroDocumento}</div>
+                                      <div><strong>Sexo:</strong> {pre.sexo}</div>
+                                      <div><strong>Fecha nac.:</strong> {pre.fechaNacimiento}</div>
+                                      <div><strong>Email:</strong> {pre.email}</div>
+                                      <div><strong>Tel. Est.:</strong> {pre.telefonoEstudiante}</div>
+                                      <div><strong>Tel. Apod.:</strong> {pre.telefonoApoderado}</div>
+                                      <div><strong>Dirección:</strong> {pre.Direccion}</div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div><strong>Programa:</strong> {pre.idPrograma}</div>
+                                      <div><strong>Ciclo:</strong> {cicloNombre[pre.idCiclo] ?? pre.idCiclo}</div>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <div className="font-medium">Prepagos ({prepagos.length})</div>
+                                    {prepagos.length === 0 ? (
+                                      <div className="text-muted-foreground">Sin prepagos</div>
+                                    ) : (
+                                      <div className="space-y-3">
+                                        {prepagos.map(pp => (
+                                          <div key={pp.id} className="flex gap-3 items-start">
+                                            <div className="min-w-40 text-xs">
+                                              <div><strong>Comprobante:</strong> {pp.nroVoucher}</div>
+                                              <div><strong>Medio:</strong> {pp.medioPago}</div>
+                                              <div><strong>Monto:</strong> S/ {pp.monto.toFixed(2)}</div>
+                                              <div><strong>Fecha:</strong> {pp.fecha}</div>
+                                              <div><strong>Tipo:</strong> {pp.TipoPago}</div>
+                                            </div>
+                                            {pp.foto ? (
+                                              <img src={pp.foto} alt="Evidencia" className="h-32 w-auto rounded border" />
+                                            ) : (
+                                              <div className="text-muted-foreground text-xs">Sin imagen</div>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <div className="font-medium">Asignar Grupo y Clase</div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                      <div>
+                                        <Select value={selGrupo ? String(selGrupo) : undefined} onValueChange={(v) => { const g = Number(v); setSelGrupoByPre(s => ({ ...s, [pre.id]: g })); setSelClaseByPre(s => ({ ...s, [pre.id]: undefined })) }}>
+                                          <SelectTrigger className="w-full"><SelectValue placeholder="Grupo" /></SelectTrigger>
+                                          <SelectContent>
+                                            {gruposCiclo.map(g => (<SelectItem key={g.id} value={String(g.id)}>{g.nombreGrupo}</SelectItem>))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      <div>
+                                        <Select value={selClase ? String(selClase) : undefined} onValueChange={(v) => { const c = Number(v); setSelClaseByPre(s => ({ ...s, [pre.id]: c })) }}>
+                                          <SelectTrigger className="w-full"><SelectValue placeholder="Clase" /></SelectTrigger>
+                                          <SelectContent>
+                                            {clasesGrupo.map(c => (<SelectItem key={c.id} value={String(c.id)}>{c.codigoClase}</SelectItem>))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex gap-2 pt-2">
+                                    <Button size="sm" onClick={() => aprobarInscripcion(pre.id, selGrupo, selClase)}>Aprobar</Button>
+                                    <Button size="sm" variant="destructive" onClick={() => rechazarInscripcion(pre.id)}>Rechazar</Button>
+                                  </div>
                                 </div>
                               </SheetContent>
                             </Sheet>
-                            <Button size="sm" onClick={() => aprobarInscripcion(item.id, item.email)}>Aprobar</Button>
-                            <Button size="sm" variant="destructive" onClick={() => rechazarInscripcion(item.id, item.email)}>Rechazar</Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               )}
@@ -215,28 +266,52 @@ export function BandejaButton({
                     <TableHead>Fecha</TableHead>
                     <TableHead>Comprobante</TableHead>
                     <TableHead>Estudiante</TableHead>
-                    <TableHead>DNI</TableHead>
-                    <TableHead>Ciclo</TableHead>
                     <TableHead>Monto</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pagosFiltrados.map(p => (
-                    <TableRow key={p.id}>
-                      <TableCell>{p.fecha}</TableCell>
-                      <TableCell>{p.comprobante}</TableCell>
-                      <TableCell>{p.nombre}</TableCell>
-                      <TableCell>{p.dni}</TableCell>
-                      <TableCell>{p.ciclo}</TableCell>
-                      <TableCell>S/ {p.monto.toFixed(2)}</TableCell>
-                      <TableCell className="capitalize">{p.estado}</TableCell>
+                  {pagosFiltrados.map(item => (
+                    <TableRow key={item.pago.id}>
+                      <TableCell>{item.pago.fecha}</TableCell>
+                      <TableCell>{item.pago.nroVoucher}</TableCell>
+                      <TableCell>{item.alumno ? `${item.alumno.nombreAlumno} ${item.alumno.aPaterno} ${item.alumno.aMaterno}` : "-"}</TableCell>
+                      <TableCell>S/ {item.pago.monto.toFixed(2)}</TableCell>
+                      <TableCell className="capitalize">{item.pago.Estado ? "aprobado" : "pendiente"}</TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={() => aprobarPago(p.id, p.nombre)}>Aprobar</Button>
-                          <Button size="sm" variant="destructive" onClick={() => desaprobarPago(p.id)}>Desaprobar</Button>
-                        </div>
+                        <Sheet>
+                          <SheetTrigger asChild>
+                            <Button size="sm" variant="outline">Ver detalles</Button>
+                          </SheetTrigger>
+                          <SheetContent side="right" className="w-full sm:max-w-lg">
+                            <SheetHeader>
+                              <SheetTitle>Revisión de pago #{item.pago.id}</SheetTitle>
+                            </SheetHeader>
+                            <div className="p-4 space-y-4 text-sm overflow-y-auto h-[calc(100vh-8rem)]">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div><strong>Fecha:</strong> {item.pago.fecha}</div>
+                                <div><strong>Comprobante:</strong> {item.pago.nroVoucher}</div>
+                                <div><strong>Monto:</strong> S/ {item.pago.monto.toFixed(2)}</div>
+                                <div><strong>Medio:</strong> {item.pago.medioPago}</div>
+                                <div><strong>Ciclo:</strong> {item.inscripcion?.idCiclo ? (cicloNombre[item.inscripcion.idCiclo] ?? item.inscripcion.idCiclo) : "-"}</div>
+                                <div><strong>Documento:</strong> {item.alumno?.nroDocumento ?? "-"}</div>
+                              </div>
+                              <div>
+                                <div className="font-medium mb-2">Evidencia</div>
+                                {item.pago.foto ? (
+                                  <img src={item.pago.foto as string} alt="Evidencia" className="max-h-72 rounded border" />
+                                ) : (
+                                  <div className="text-muted-foreground">Sin imagen</div>
+                                )}
+                              </div>
+                              <div className="flex gap-2">
+                                {!item.pago.Estado && <Button size="sm" onClick={() => aprobarPago(item.pago.id, item.alumno ? item.alumno.nombreAlumno : undefined)}>Aprobar</Button>}
+                                <Button size="sm" variant="destructive" onClick={() => desaprobarPago(item.pago.id)}>Rechazar</Button>
+                              </div>
+                            </div>
+                          </SheetContent>
+                        </Sheet>
                       </TableCell>
                     </TableRow>
                   ))}

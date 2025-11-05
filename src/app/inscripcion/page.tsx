@@ -77,7 +77,13 @@ export default function Page() {
     },
     mode: "onChange",
   })
-  const { clear } = useAutoSaveForm<FormValues>({ form, storageKey: "inscripcion-form" })
+  const { clear } = useAutoSaveForm<FormValues>({
+    form,
+    storageKey: "inscripcion-form",
+    // Requerimiento: al recargar, limpiar y no restaurar datos guardados
+    restoreOnMount: false,
+    clearOnMount: true,
+  })
 
   // Carga catálogos iniciales
   useEffect(() => {
@@ -85,7 +91,8 @@ export default function Page() {
       try {
         const [progs, cics, deps] = await Promise.all([getProgramas(), getCiclos(), getDepartamentos()])
         setProgramas(progs)
-        setCiclos(cics)
+        // Mostrar solo ciclos activos (estado === true)
+        setCiclos(cics.filter(c => c.estado === true))
         setDepartamentos(deps)
       } catch (e: any) {
         toast.error("No se pudieron cargar catálogos", { description: e.message })

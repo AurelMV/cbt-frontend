@@ -1,11 +1,31 @@
 import { useEffect, useRef } from "react"
 import type { FieldValues, UseFormReturn } from "react-hook-form"
 
-export function useAutoSaveForm<T extends FieldValues>({ form, storageKey, intervalMs = 2000 }: { form: UseFormReturn<T>, storageKey: string, intervalMs?: number }) {
+export function useAutoSaveForm<T extends FieldValues>({
+  form,
+  storageKey,
+  intervalMs = 2000,
+  restoreOnMount = true,
+  clearOnMount = false,
+}: {
+  form: UseFormReturn<T>,
+  storageKey: string,
+  intervalMs?: number,
+  /** Carga valores guardados en localStorage al montar (por defecto: true) */
+  restoreOnMount?: boolean,
+  /** Limpia localStorage al montar y no restaura valores (por defecto: false) */
+  clearOnMount?: boolean,
+}) {
   const timer = useRef<number | null>(null)
 
   // Cargar valores iniciales
   useEffect(() => {
+    if (clearOnMount) {
+      localStorage.removeItem(storageKey)
+      return
+    }
+    if (!restoreOnMount) return
+
     const raw = localStorage.getItem(storageKey)
     if (raw) {
       try {
@@ -19,7 +39,7 @@ export function useAutoSaveForm<T extends FieldValues>({ form, storageKey, inter
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey])
+  }, [storageKey, clearOnMount, restoreOnMount])
 
   // Guardado automático
   useEffect(() => {
