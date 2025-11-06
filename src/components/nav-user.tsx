@@ -29,13 +29,13 @@ import {
 
 export function NavUser({
   user,
-}: {
-  user: {
+}: Readonly<{
+  user: Readonly<{
     name: string
     email: string
     avatar: string
-  }
-}) {
+  }>
+}>) {
   const { isMobile } = useSidebar()
 
   return (
