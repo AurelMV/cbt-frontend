@@ -16,15 +16,14 @@ import { useForm, Controller } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Field, FieldContent, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function Page() {
   const EMAIL_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
   const inscQ = useInscripciones()
   const createInsc = useCreateInscripcion()
-  // edit mutation se usa en componente local de edición
   const alumnosQ = useAlumnos()
   const ciclosQ = useCiclos()
-  // const gruposQ = useGrupos()
   const clasesQ = useClases()
   const programasQ = useProgramas()
 
@@ -32,6 +31,7 @@ export default function Page() {
   const [q, setQ] = useState("")
   const [edit, setEdit] = useState<InscripcionRead | null>(null)
   const [openCreate, setOpenCreate] = useState(false)
+  const [wizard, setWizard] = useState<"alumno" | "insc" | "pago">("alumno")
 
   // Schemas de validación
   const alumnoSchema = z.object({
@@ -69,20 +69,23 @@ export default function Page() {
     archivo: z.any().optional().nullable(),
   })
 
-  const createSchema = z.object({
-    crearAlumno: z.boolean().default(false),
-    alumnoSel: z.string().optional(),
-    alumno: alumnoSchema.optional(),
-    insc: inscSchema,
-    pagoNow: z.boolean().default(false),
-    pago: pagoSchema.optional(),
-  }).refine((d) => d.crearAlumno || (!!d.alumnoSel && d.alumnoSel !== ""), {
-    message: "Seleccione o cree un alumno",
-    path: ["alumnoSel"],
-  }).refine((d) => !d.pagoNow || !!d.pago, {
-    message: "Complete los datos de pago",
-    path: ["pago"],
-  })
+  const createSchema = z
+    .object({
+      crearAlumno: z.boolean().default(false),
+      alumnoSel: z.string().optional(),
+      alumno: alumnoSchema.optional(),
+      insc: inscSchema,
+      pagoNow: z.boolean().default(false),
+      pago: pagoSchema.optional(),
+    })
+    .refine((d) => d.crearAlumno || (!!d.alumnoSel && d.alumnoSel !== ""), {
+      message: "Seleccione o cree un alumno",
+      path: ["alumnoSel"],
+    })
+    .refine((d) => !d.pagoNow || !!d.pago, {
+      message: "Complete los datos de pago",
+      path: ["pago"],
+    })
 
   const createForm = useForm({
     resolver: zodResolver(createSchema),
@@ -127,14 +130,13 @@ export default function Page() {
 
   const rows = inscQ.data ?? []
   const filtrados = useMemo(() => {
-    return rows.filter(r => (!ciclo || String(r.idCiclo) === ciclo) && (!q || String(r.id).includes(q) || r.Codigo.toLowerCase().includes(q.toLowerCase())))
+    return rows.filter(
+      (r) => (!ciclo || String(r.idCiclo) === ciclo) && (!q || String(r.id).includes(q) || r.Codigo.toLowerCase().includes(q.toLowerCase()))
+    )
   }, [rows, ciclo, q])
-
-  // edición se maneja con EditInscripcionForm
 
   const onSubmitCrear = createForm.handleSubmit(async (data) => {
     try {
-      // 1) Alumno
       let idAlumno = Number(data.alumnoSel) || 0
       if (data.crearAlumno) {
         const res = await (await import("@/services/alumnos")).crearAlumno({
@@ -153,19 +155,18 @@ export default function Page() {
         })
         idAlumno = res.id
       }
-      if (!idAlumno) { toast.error("Seleccione o cree un alumno"); return }
-
-      // 2) Inscripción
+      if (!idAlumno) {
+        toast.error("Seleccione o cree un alumno")
+        return
+      }
       const insc = await createInsc.mutateAsync({ ...data.insc, idAlumno })
-
-      // 3) Pago opcional
       if (data.pagoNow && data.pago) {
         let foto: string | null = null
         const file: File | null | undefined = (data.pago as { archivo?: File | null }).archivo ?? null
         if (file instanceof File) {
           foto = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader()
-            reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("No se pudo leer archivo"))
+            reader.onload = () => (typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("No se pudo leer archivo")))
             reader.onerror = () => reject(new Error("No se pudo leer archivo"))
             reader.readAsDataURL(file)
           })
@@ -180,7 +181,6 @@ export default function Page() {
           Estado: false,
         })
       }
-
       toast.success("Inscripción creada")
       setOpenCreate(false)
       createForm.reset()
@@ -191,8 +191,6 @@ export default function Page() {
     }
   })
 
-  // Acciones de estado/accso removidas según requerimiento; solo queda "Editar"
-
   return (
     <div className="p-4 md:p-6 space-y-6">
       <Card>
@@ -202,244 +200,345 @@ export default function Page() {
             <SheetTrigger asChild>
               <Button>Nueva inscripción</Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-full sm:max-w-xl">
-              <SheetHeader>
+            <SheetContent side="right" className="w-full sm:max-w-xl p-0">
+              <SheetHeader className="px-4 py-4">
                 <SheetTitle>Nueva inscripción</SheetTitle>
               </SheetHeader>
-              <div className="p-4">
-                <form onSubmit={onSubmitCrear} className="space-y-6">
-                  <FieldSet>
-                    <FieldLegend>Alumno</FieldLegend>
-                    <FieldGroup>
-                      <Field>
-                        <FieldLabel htmlFor="crearAlumno">
-                          <div className="flex items-center gap-2">
-                            <input id="crearAlumno" type="checkbox" {...createForm.register("crearAlumno")} />
-                            <span>Crear nuevo alumno</span>
+              <form onSubmit={onSubmitCrear} className="flex h-full flex-col">
+                <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                  <Tabs value={wizard} onValueChange={(v) => setWizard(v as typeof wizard)} className="w-full">
+                    <TabsList className="mb-2">
+                      <TabsTrigger value="alumno">Alumno</TabsTrigger>
+                      <TabsTrigger value="insc">Inscripción</TabsTrigger>
+                      <TabsTrigger value="pago">Pago</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="alumno" className="mt-0">
+                      <FieldSet>
+                        <FieldLegend>Alumno</FieldLegend>
+                        <FieldGroup>
+                          <Field>
+                            <FieldLabel htmlFor="crearAlumno">
+                              <div className="flex items-center gap-2">
+                                <input id="crearAlumno" type="checkbox" {...createForm.register("crearAlumno")} />
+                                <span>Crear nuevo alumno</span>
+                              </div>
+                            </FieldLabel>
+                          </Field>
+                          {!createForm.watch("crearAlumno") && (
+                            <Field>
+                              <FieldLabel htmlFor="alumnoSel">Alumno existente</FieldLabel>
+                              <FieldContent>
+                                <Controller
+                                  control={createForm.control}
+                                  name="alumnoSel"
+                                  render={({ field }) => (
+                                    <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                                      <SelectTrigger id="alumnoSel">
+                                        <SelectValue placeholder={alumnosQ.isLoading ? "Cargando…" : "Seleccione"} />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {(alumnosQ.data ?? []).map(a => (
+                                          <SelectItem key={a.id} value={String(a.id)}>{a.nombreAlumno} {a.aPaterno}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                />
+                                <FieldError errors={[createForm.formState.errors.alumnoSel]} />
+                              </FieldContent>
+                            </Field>
+                          )}
+                          {createForm.watch("crearAlumno") && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <Field>
+                                <FieldLabel htmlFor="alNombre">Nombre</FieldLabel>
+                                <FieldContent>
+                                  <Input id="alNombre" {...createForm.register("alumno.nombreAlumno")} />
+                                  <FieldError errors={[createForm.formState.errors.alumno?.nombreAlumno]} />
+                                </FieldContent>
+                              </Field>
+                              <Field>
+                                <FieldLabel htmlFor="alAPaterno">Apellido paterno</FieldLabel>
+                                <FieldContent>
+                                  <Input id="alAPaterno" {...createForm.register("alumno.aPaterno")} />
+                                  <FieldError errors={[createForm.formState.errors.alumno?.aPaterno]} />
+                                </FieldContent>
+                              </Field>
+                              <Field>
+                                <FieldLabel htmlFor="alAMaterno">Apellido materno</FieldLabel>
+                                <FieldContent>
+                                  <Input id="alAMaterno" {...createForm.register("alumno.aMaterno")} />
+                                  <FieldError errors={[createForm.formState.errors.alumno?.aMaterno]} />
+                                </FieldContent>
+                              </Field>
+                              <Field>
+                                <FieldLabel htmlFor="alSexo">Sexo</FieldLabel>
+                                <FieldContent>
+                                  <Controller
+                                    control={createForm.control}
+                                    name="alumno.sexo"
+                                    render={({ field }) => (
+                                      <Select value={field.value ?? "M"} onValueChange={field.onChange}>
+                                        <SelectTrigger id="alSexo"><SelectValue placeholder="Seleccione" /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="M">Masculino</SelectItem>
+                                          <SelectItem value="F">Femenino</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    )}
+                                  />
+                                  <FieldError errors={[createForm.formState.errors.alumno?.sexo]} />
+                                </FieldContent>
+                              </Field>
+                              <Field>
+                                <FieldLabel htmlFor="alDni">DNI</FieldLabel>
+                                <FieldContent>
+                                  <Input id="alDni" {...createForm.register("alumno.nroDocumento")} />
+                                  <FieldError errors={[createForm.formState.errors.alumno?.nroDocumento]} />
+                                </FieldContent>
+                              </Field>
+                              <Field>
+                                <FieldLabel htmlFor="alNacimiento">Fecha de nacimiento</FieldLabel>
+                                <FieldContent>
+                                  <Input id="alNacimiento" type="date" {...createForm.register("alumno.fechaNacimiento")} />
+                                  <FieldError errors={[createForm.formState.errors.alumno?.fechaNacimiento]} />
+                                </FieldContent>
+                              </Field>
+                              <Field>
+                                <FieldLabel htmlFor="alAno">Año culminado</FieldLabel>
+                                <FieldContent>
+                                  <Input id="alAno" type="number" min={1900} max={2100} {...createForm.register("alumno.anoCulminado", { valueAsNumber: true })} />
+                                  <FieldError errors={[createForm.formState.errors.alumno?.anoCulminado]} />
+                                </FieldContent>
+                              </Field>
+                              <Field>
+                                <FieldLabel htmlFor="alColegio">ID Colegio</FieldLabel>
+                                <FieldContent>
+                                  <Input id="alColegio" type="number" min={0} {...createForm.register("alumno.idColegio", { valueAsNumber: true })} />
+                                  <FieldError errors={[createForm.formState.errors.alumno?.idColegio]} />
+                                </FieldContent>
+                              </Field>
+                              <Field className="md:col-span-2">
+                                <FieldLabel htmlFor="alDireccion">Dirección</FieldLabel>
+                                <FieldContent>
+                                  <Input id="alDireccion" {...createForm.register("alumno.Direccion")} />
+                                  <FieldError errors={[createForm.formState.errors.alumno?.Direccion]} />
+                                </FieldContent>
+                              </Field>
+                              <Field>
+                                <FieldLabel htmlFor="alTelEst">Teléfono estudiante</FieldLabel>
+                                <FieldContent>
+                                  <Input id="alTelEst" {...createForm.register("alumno.telefonoEstudiante")} />
+                                  <FieldError errors={[createForm.formState.errors.alumno?.telefonoEstudiante]} />
+                                </FieldContent>
+                              </Field>
+                              <Field>
+                                <FieldLabel htmlFor="alTelApo">Teléfono apoderado</FieldLabel>
+                                <FieldContent>
+                                  <Input id="alTelApo" {...createForm.register("alumno.telefonoApoderado")} />
+                                  <FieldError errors={[createForm.formState.errors.alumno?.telefonoApoderado]} />
+                                </FieldContent>
+                              </Field>
+                              <Field>
+                                <FieldLabel htmlFor="alEmail">Email</FieldLabel>
+                                <FieldContent>
+                                  <Input id="alEmail" type="email" {...createForm.register("alumno.email")} />
+                                  <FieldError errors={[createForm.formState.errors.alumno?.email]} />
+                                </FieldContent>
+                              </Field>
+                            </div>
+                          )}
+                        </FieldGroup>
+                      </FieldSet>
+                    </TabsContent>
+
+                    <TabsContent value="insc" className="mt-0">
+                      <FieldSet>
+                        <FieldLegend>Inscripción</FieldLegend>
+                        <FieldGroup>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <Field>
+                              <FieldLabel htmlFor="programaSel">Programa</FieldLabel>
+                              <FieldContent>
+                                <Controller
+                                  control={createForm.control}
+                                  name="insc.idPrograma"
+                                  render={({ field }) => {
+                                    let selVal = ""
+                                    if (typeof field.value === "number") selVal = String(field.value)
+                                    else if (typeof field.value === "string") selVal = field.value
+                                    return (
+                                      <Select value={selVal} onValueChange={(v) => field.onChange(Number(v))}>
+                                        <SelectTrigger id="programaSel"><SelectValue placeholder={programasQ.isLoading ? "Cargando…" : "Seleccione"} /></SelectTrigger>
+                                        <SelectContent>
+                                          {(programasQ.data ?? []).map(p => (<SelectItem key={p.id} value={String(p.id)}>{p.nombrePrograma}</SelectItem>))}
+                                        </SelectContent>
+                                      </Select>
+                                    )
+                                  }}
+                                />
+                                <FieldError errors={[createForm.formState.errors.insc?.idPrograma]} />
+                              </FieldContent>
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor="cicloSel">Ciclo</FieldLabel>
+                              <FieldContent>
+                                <Controller
+                                  control={createForm.control}
+                                  name="insc.idCiclo"
+                                  render={({ field }) => {
+                                    let selVal = ""
+                                    if (typeof field.value === "number") selVal = String(field.value)
+                                    else if (typeof field.value === "string") selVal = field.value
+                                    return (
+                                      <Select value={selVal} onValueChange={(v) => field.onChange(Number(v))}>
+                                        <SelectTrigger id="cicloSel"><SelectValue placeholder={ciclosQ.isLoading ? "Cargando…" : "Seleccione"} /></SelectTrigger>
+                                        <SelectContent>
+                                          {(ciclosQ.data ?? []).map(c => (<SelectItem key={c.id} value={String(c.id)}>{c.nombreCiclo}</SelectItem>))}
+                                        </SelectContent>
+                                      </Select>
+                                    )
+                                  }}
+                                />
+                                <FieldError errors={[createForm.formState.errors.insc?.idCiclo]} />
+                              </FieldContent>
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor="claseSel">Clase</FieldLabel>
+                              <FieldContent>
+                                <Controller
+                                  control={createForm.control}
+                                  name="insc.idClase"
+                                  render={({ field }) => {
+                                    let selVal = ""
+                                    if (typeof field.value === "number") selVal = String(field.value)
+                                    else if (typeof field.value === "string") selVal = field.value
+                                    return (
+                                      <Select value={selVal} onValueChange={(v) => field.onChange(Number(v))}>
+                                        <SelectTrigger id="claseSel"><SelectValue placeholder={clasesQ.isLoading ? "Cargando…" : "Seleccione"} /></SelectTrigger>
+                                        <SelectContent>
+                                          {(clasesQ.data ?? []).map(c => (<SelectItem key={c.id} value={String(c.id)}>{c.codigoClase}</SelectItem>))}
+                                        </SelectContent>
+                                      </Select>
+                                    )
+                                  }}
+                                />
+                                <FieldError errors={[createForm.formState.errors.insc?.idClase]} />
+                              </FieldContent>
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor="codigoInsc">Código</FieldLabel>
+                              <FieldContent>
+                                <Input id="codigoInsc" {...createForm.register("insc.Codigo")} />
+                                <FieldError errors={[createForm.formState.errors.insc?.Codigo]} />
+                              </FieldContent>
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor="turnoInsc">Turno</FieldLabel>
+                              <FieldContent>
+                                <Input id="turnoInsc" {...createForm.register("insc.turno")} />
+                                <FieldError errors={[createForm.formState.errors.insc?.turno]} />
+                              </FieldContent>
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor="fechaInsc">Fecha</FieldLabel>
+                              <FieldContent>
+                                <Input id="fechaInsc" type="date" {...createForm.register("insc.fecha")} />
+                                <FieldError errors={[createForm.formState.errors.insc?.fecha]} />
+                              </FieldContent>
+                            </Field>
                           </div>
-                        </FieldLabel>
-                      </Field>
-                      {!createForm.watch("crearAlumno") && (
-                        <Field>
-                          <FieldLabel htmlFor="alumnoSel">Alumno existente</FieldLabel>
-                          <FieldContent>
-                            <Controller
-                              control={createForm.control}
-                              name="alumnoSel"
-                              render={({ field }) => (
-                                <Select value={field.value ?? ""} onValueChange={field.onChange}>
-                                  <SelectTrigger id="alumnoSel">
-                                    <SelectValue placeholder={alumnosQ.isLoading ? "Cargando…" : "Seleccione"} />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {(alumnosQ.data ?? []).map(a => (
-                                      <SelectItem key={a.id} value={String(a.id)}>{a.nombreAlumno} {a.aPaterno}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              )}
-                            />
-                            <FieldError errors={[createForm.formState.errors.alumnoSel]} />
-                          </FieldContent>
-                        </Field>
-                      )}
-                      {createForm.watch("crearAlumno") && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <Field>
-                            <FieldLabel htmlFor="alNombre">Nombre</FieldLabel>
-                            <FieldContent>
-                              <Input id="alNombre" {...createForm.register("alumno.nombreAlumno")} />
-                              <FieldError errors={[createForm.formState.errors.alumno?.nombreAlumno]} />
-                            </FieldContent>
-                          </Field>
-                          <Field>
-                            <FieldLabel htmlFor="alAPaterno">Apellido paterno</FieldLabel>
-                            <FieldContent>
-                              <Input id="alAPaterno" {...createForm.register("alumno.aPaterno")} />
-                              <FieldError errors={[createForm.formState.errors.alumno?.aPaterno]} />
-                            </FieldContent>
-                          </Field>
-                          <Field>
-                            <FieldLabel htmlFor="alDni">DNI</FieldLabel>
-                            <FieldContent>
-                              <Input id="alDni" {...createForm.register("alumno.nroDocumento")} />
-                              <FieldError errors={[createForm.formState.errors.alumno?.nroDocumento]} />
-                            </FieldContent>
-                          </Field>
-                          <Field>
-                            <FieldLabel htmlFor="alEmail">Email</FieldLabel>
-                            <FieldContent>
-                              <Input id="alEmail" type="email" {...createForm.register("alumno.email")} />
-                              <FieldError errors={[createForm.formState.errors.alumno?.email]} />
-                            </FieldContent>
-                          </Field>
-                        </div>
-                      )}
-                    </FieldGroup>
-                  </FieldSet>
+                        </FieldGroup>
+                      </FieldSet>
+                    </TabsContent>
 
-                  <FieldSet>
-                    <FieldLegend>Inscripción</FieldLegend>
-                    <FieldGroup>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Field>
-                          <FieldLabel htmlFor="programaSel">Programa</FieldLabel>
-                          <FieldContent>
-                            <Controller
-                              control={createForm.control}
-                              name="insc.idPrograma"
-                              render={({ field }) => {
-                                let selVal = ""
-                                if (typeof field.value === "number") selVal = String(field.value)
-                                else if (typeof field.value === "string") selVal = field.value
-                                return (
-                                <Select value={selVal} onValueChange={(v) => field.onChange(Number(v))}>
-                                  <SelectTrigger id="programaSel"><SelectValue placeholder={programasQ.isLoading ? "Cargando…" : "Seleccione"} /></SelectTrigger>
-                                  <SelectContent>
-                                    {(programasQ.data ?? []).map(p => (<SelectItem key={p.id} value={String(p.id)}>{p.nombrePrograma}</SelectItem>))}
-                                  </SelectContent>
-                                </Select>
-                                )
-                              }}
-                            />
-                            <FieldError errors={[createForm.formState.errors.insc?.idPrograma]} />
-                          </FieldContent>
-                        </Field>
-                        <Field>
-                          <FieldLabel htmlFor="cicloSel">Ciclo</FieldLabel>
-                          <FieldContent>
-                            <Controller
-                              control={createForm.control}
-                              name="insc.idCiclo"
-                              render={({ field }) => {
-                                let selVal = ""
-                                if (typeof field.value === "number") selVal = String(field.value)
-                                else if (typeof field.value === "string") selVal = field.value
-                                return (
-                                <Select value={selVal} onValueChange={(v) => field.onChange(Number(v))}>
-                                  <SelectTrigger id="cicloSel"><SelectValue placeholder={ciclosQ.isLoading ? "Cargando…" : "Seleccione"} /></SelectTrigger>
-                                  <SelectContent>
-                                    {(ciclosQ.data ?? []).map(c => (<SelectItem key={c.id} value={String(c.id)}>{c.nombreCiclo}</SelectItem>))}
-                                  </SelectContent>
-                                </Select>
-                                )
-                              }}
-                            />
-                            <FieldError errors={[createForm.formState.errors.insc?.idCiclo]} />
-                          </FieldContent>
-                        </Field>
-                        <Field>
-                          <FieldLabel htmlFor="claseSel">Clase</FieldLabel>
-                          <FieldContent>
-                            <Controller
-                              control={createForm.control}
-                              name="insc.idClase"
-                              render={({ field }) => {
-                                let selVal = ""
-                                if (typeof field.value === "number") selVal = String(field.value)
-                                else if (typeof field.value === "string") selVal = field.value
-                                return (
-                                <Select value={selVal} onValueChange={(v) => field.onChange(Number(v))}>
-                                  <SelectTrigger id="claseSel"><SelectValue placeholder={clasesQ.isLoading ? "Cargando…" : "Seleccione"} /></SelectTrigger>
-                                  <SelectContent>
-                                    {(clasesQ.data ?? []).map(c => (<SelectItem key={c.id} value={String(c.id)}>{c.codigoClase}</SelectItem>))}
-                                  </SelectContent>
-                                </Select>
-                                )
-                              }}
-                            />
-                            <FieldError errors={[createForm.formState.errors.insc?.idClase]} />
-                          </FieldContent>
-                        </Field>
-                        <Field>
-                          <FieldLabel htmlFor="codigoInsc">Código</FieldLabel>
-                          <FieldContent>
-                            <Input id="codigoInsc" {...createForm.register("insc.Codigo")} />
-                            <FieldError errors={[createForm.formState.errors.insc?.Codigo]} />
-                          </FieldContent>
-                        </Field>
-                        <Field>
-                          <FieldLabel htmlFor="turnoInsc">Turno</FieldLabel>
-                          <FieldContent>
-                            <Input id="turnoInsc" {...createForm.register("insc.turno")} />
-                            <FieldError errors={[createForm.formState.errors.insc?.turno]} />
-                          </FieldContent>
-                        </Field>
-                        <Field>
-                          <FieldLabel htmlFor="fechaInsc">Fecha</FieldLabel>
-                          <FieldContent>
-                            <Input id="fechaInsc" type="date" {...createForm.register("insc.fecha")} />
-                            <FieldError errors={[createForm.formState.errors.insc?.fecha]} />
-                          </FieldContent>
-                        </Field>
-                      </div>
-                    </FieldGroup>
-                  </FieldSet>
-
-                  <FieldSet>
-                    <FieldLegend>Pago (opcional)</FieldLegend>
-                    <FieldGroup>
-                      <Field>
-                        <FieldLabel htmlFor="pagoNow">
-                          <div className="flex items-center gap-2">
-                            <input id="pagoNow" type="checkbox" {...createForm.register("pagoNow")} />
-                            <span>Registrar pago ahora</span>
-                          </div>
-                        </FieldLabel>
-                      </Field>
-                      {createForm.watch("pagoNow") && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <TabsContent value="pago" className="mt-0">
+                      <FieldSet>
+                        <FieldLegend>Pago (opcional)</FieldLegend>
+                        <FieldGroup>
                           <Field>
-                            <FieldLabel htmlFor="nroVoucher">Comprobante</FieldLabel>
-                            <FieldContent>
-                              <Input id="nroVoucher" {...createForm.register("pago.nroVoucher")} />
-                              <FieldError errors={[createForm.formState.errors.pago?.nroVoucher]} />
-                            </FieldContent>
+                            <FieldLabel htmlFor="pagoNow">
+                              <div className="flex items-center gap-2">
+                                <input id="pagoNow" type="checkbox" {...createForm.register("pagoNow")} />
+                                <span>Registrar pago ahora</span>
+                              </div>
+                            </FieldLabel>
                           </Field>
-                          <Field>
-                            <FieldLabel htmlFor="fechaPago">Fecha</FieldLabel>
-                            <FieldContent>
-                              <Input id="fechaPago" type="date" {...createForm.register("pago.fecha")} />
-                              <FieldError errors={[createForm.formState.errors.pago?.fecha]} />
-                            </FieldContent>
-                          </Field>
-                          <Field>
-                            <FieldLabel htmlFor="montoPago">Monto</FieldLabel>
-                            <FieldContent>
-                              <Input id="montoPago" type="number" min={0} step="0.01" {...createForm.register("pago.monto", { valueAsNumber: true })} />
-                              <FieldError errors={[createForm.formState.errors.pago?.monto]} />
-                            </FieldContent>
-                          </Field>
-                          <Field>
-                            <FieldLabel htmlFor="medioPago">Medio</FieldLabel>
-                            <FieldContent>
-                              <Input id="medioPago" {...createForm.register("pago.medioPago")} />
-                              <FieldError errors={[createForm.formState.errors.pago?.medioPago]} />
-                            </FieldContent>
-                          </Field>
-                          <Field className="md:col-span-2">
-                            <FieldLabel htmlFor="archivoPago">Evidencia (imagen/pdf)</FieldLabel>
-                            <FieldContent>
-                              <Controller
-                                control={createForm.control}
-                                name="pago.archivo"
-                                render={({ field }) => (
-                                  <Input id="archivoPago" type="file" accept="image/*,application/pdf" onChange={(e) => field.onChange(e.target.files?.[0] ?? null)} />
-                                )}
-                              />
-                            </FieldContent>
-                          </Field>
-                        </div>
-                      )}
-                    </FieldGroup>
-                  </FieldSet>
-
-                  <div className="flex gap-2">
-                    <Button type="submit" disabled={createInsc.isPending}>{createInsc.isPending ? "Creando…" : "Crear"}</Button>
+                          {createForm.watch("pagoNow") && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <Field>
+                                <FieldLabel htmlFor="nroVoucher">Comprobante</FieldLabel>
+                                <FieldContent>
+                                  <Input id="nroVoucher" {...createForm.register("pago.nroVoucher")} />
+                                  <FieldError errors={[createForm.formState.errors.pago?.nroVoucher]} />
+                                </FieldContent>
+                              </Field>
+                              <Field>
+                                <FieldLabel htmlFor="fechaPago">Fecha</FieldLabel>
+                                <FieldContent>
+                                  <Input id="fechaPago" type="date" {...createForm.register("pago.fecha")} />
+                                  <FieldError errors={[createForm.formState.errors.pago?.fecha]} />
+                                </FieldContent>
+                              </Field>
+                              <Field>
+                                <FieldLabel htmlFor="montoPago">Monto</FieldLabel>
+                                <FieldContent>
+                                  <Input id="montoPago" type="number" min={0} step="0.01" {...createForm.register("pago.monto", { valueAsNumber: true })} />
+                                  <FieldError errors={[createForm.formState.errors.pago?.monto]} />
+                                </FieldContent>
+                              </Field>
+                              <Field>
+                                <FieldLabel htmlFor="medioPago">Medio</FieldLabel>
+                                <FieldContent>
+                                  <Input id="medioPago" {...createForm.register("pago.medioPago")} />
+                                  <FieldError errors={[createForm.formState.errors.pago?.medioPago]} />
+                                </FieldContent>
+                              </Field>
+                              <Field className="md:col-span-2">
+                                <FieldLabel htmlFor="archivoPago">Evidencia (imagen/pdf)</FieldLabel>
+                                <FieldContent>
+                                  <Controller
+                                    control={createForm.control}
+                                    name="pago.archivo"
+                                    render={({ field }) => (
+                                      <Input id="archivoPago" type="file" accept="image/*,application/pdf" onChange={(e) => field.onChange(e.target.files?.[0] ?? null)} />
+                                    )}
+                                  />
+                                </FieldContent>
+                              </Field>
+                            </div>
+                          )}
+                        </FieldGroup>
+                      </FieldSet>
+                    </TabsContent>
+                  </Tabs>
+                </div>
+                <div className="border-t bg-background p-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
                     <Button type="button" variant="outline" onClick={() => setOpenCreate(false)}>Cancelar</Button>
                   </div>
-                </form>
-              </div>
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="outline" disabled={wizard === "alumno"} onClick={() => setWizard(wizard === "pago" ? "insc" : "alumno")}>Atrás</Button>
+                    {wizard === "pago" ? (
+                      <Button type="submit" disabled={createInsc.isPending}>{createInsc.isPending ? "Creando…" : "Crear"}</Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        onClick={async () => {
+                          if (wizard === "alumno") {
+                            const ok = await createForm.trigger(["crearAlumno", "alumnoSel", "alumno.nombreAlumno", "alumno.aPaterno", "alumno.nroDocumento"]) 
+                            if (ok) setWizard("insc")
+                          } else if (wizard === "insc") {
+                            const ok = await createForm.trigger(["insc.idPrograma", "insc.idCiclo", "insc.idClase", "insc.Codigo", "insc.turno", "insc.fecha"]) 
+                            if (ok) setWizard("pago")
+                          }
+                        }}
+                      >Siguiente</Button>
+                    )}
+                  </div>
+                </div>
+              </form>
             </SheetContent>
           </Sheet>
         </CardHeader>
