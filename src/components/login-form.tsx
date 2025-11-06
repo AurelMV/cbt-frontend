@@ -27,22 +27,24 @@ export function LoginForm({
   const navigate = useNavigate()
   const login = useAuth((s) => s.login)
 
-  const onSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
+  const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
     e.preventDefault()
     const form = new FormData(e.currentTarget)
-    const email = String(form.get("email") || "")
-    const password = String(form.get("password") || "")
+    const email = (form.get("email") as string) ?? ""
+    const password = (form.get("password") as string) ?? ""
     setLoading(true)
-    try {
-      const user = await login(email, password)
-      toast.success("Bienvenido", { description: `${user.name} (${user.role})` })
-      if (user.role === "admin") navigate("/admin")
-      else navigate("/asistencias")
-    } catch {
-      toast.error("Credenciales inválidas")
-    } finally {
-      setLoading(false)
-    }
+    void (async () => {
+      try {
+        const user = await login(email, password)
+        toast.success("Bienvenido", { description: `${user.name} (${user.role})` })
+        if (user.role === "admin") navigate("/admin")
+        else navigate("/asistencias")
+      } catch {
+        toast.error("Credenciales inválidas")
+      } finally {
+        setLoading(false)
+      }
+    })()
   }
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
@@ -69,12 +71,12 @@ export function LoginForm({
               <Field>
                 <div className="flex items-center">
                   <FieldLabel htmlFor="password">Password</FieldLabel>
-                  <a
-                    href="#"
-                    className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
+                  <button
+                    type="button"
+                    className="ml-auto inline-block text-sm underline-offset-4 hover:underline text-left"
                   >
                     Forgot your password?
-                  </a>
+                  </button>
                 </div>
                 <Input id="password" type="password" required name="password" />
               </Field>
@@ -84,7 +86,7 @@ export function LoginForm({
                   Login with Google
                 </Button>
                 <FieldDescription className="text-center">
-                  Don&apos;t have an account? <a href="#">Sign up</a>
+                  Don&apos;t have an account? <button type="button" className="underline underline-offset-4">Sign up</button>
                 </FieldDescription>
               </Field>
             </FieldGroup>
