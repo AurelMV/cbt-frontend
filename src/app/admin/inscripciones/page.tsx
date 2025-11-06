@@ -161,7 +161,7 @@ export default function Page() {
       // 3) Pago opcional
       if (data.pagoNow && data.pago) {
         let foto: string | null = null
-        const file: File | null | undefined = (data.pago as any).archivo
+        const file: File | null | undefined = (data.pago as { archivo?: File | null }).archivo ?? null
         if (file instanceof File) {
           foto = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader()

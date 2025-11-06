@@ -11,7 +11,7 @@ import { useCiclos } from "@/hooks/use-ciclos"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Field, FieldContent, FieldError, FieldLabel } from "@/components/ui/field"
-import { useForm } from "react-hook-form"
+import { useForm, type Resolver } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
  
@@ -99,7 +99,7 @@ function CreateGrupoSheet({ onCreated }: Readonly<{ onCreated: () => void }>) {
   const ciclos = useCiclos()
   const form = useForm<import("@/services/grupos").GrupoUpdate>({
     // Casting resolver to any to accommodate z.coerce with RHF types
-    resolver: zodResolver(grupoSchema) as any,
+    resolver: zodResolver(grupoSchema) as Resolver<import("@/services/grupos").GrupoUpdate>,
     defaultValues: { nombreGrupo: "", aforo: 0, estado: true, ciclo_id: 0 },
   })
   const closeRef = useRef<HTMLButtonElement | null>(null)
@@ -182,7 +182,7 @@ function EditGrupoSheet({ grupo, onSaved }: Readonly<{ grupo: { id: number; nomb
   const updateMutation = useUpdateGrupo()
   const ciclos = useCiclos()
   const form = useForm<import("@/services/grupos").GrupoUpdate>({
-    resolver: zodResolver(grupoSchema) as any,
+    resolver: zodResolver(grupoSchema) as Resolver<import("@/services/grupos").GrupoUpdate>,
     defaultValues: { nombreGrupo: grupo.nombreGrupo, aforo: grupo.aforo, estado: grupo.estado, ciclo_id: grupo.ciclo_id },
   })
   const closeRef = useRef<HTMLButtonElement | null>(null)

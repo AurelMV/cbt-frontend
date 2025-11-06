@@ -10,7 +10,7 @@ import { useGrupos } from "@/hooks/use-grupos"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Field, FieldContent, FieldError, FieldLabel } from "@/components/ui/field"
-import { useForm } from "react-hook-form"
+import { useForm, type Resolver } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 
@@ -89,7 +89,7 @@ function CreateClaseSheet({ onCreated }: Readonly<{ onCreated: () => void }>) {
   const createMutation = useCreateClase()
   const grupos = useGrupos()
   const form = useForm<import("@/services/clases").ClaseCreate>({
-    resolver: zodResolver(claseSchema) as any,
+    resolver: zodResolver(claseSchema) as Resolver<import("@/services/clases").ClaseCreate>,
     defaultValues: { codigoClase: "", grupo_id: 0 },
   })
   const closeRef = useRef<HTMLButtonElement | null>(null)
@@ -156,7 +156,7 @@ function EditClaseSheet({ clase, onSaved }: Readonly<{ clase: { id: number; codi
   const updateMutation = useUpdateClase()
   const grupos = useGrupos()
   const form = useForm<import("@/services/clases").ClaseUpdate>({
-    resolver: zodResolver(claseSchema) as any,
+    resolver: zodResolver(claseSchema) as Resolver<import("@/services/clases").ClaseUpdate>,
     defaultValues: { codigoClase: clase.codigoClase, grupo_id: clase.grupo_id },
   })
   const closeRef = useRef<HTMLButtonElement | null>(null)

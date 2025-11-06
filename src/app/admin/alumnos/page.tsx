@@ -8,7 +8,7 @@ import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger 
 import { Field, FieldContent, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useForm } from "react-hook-form"
+import { useForm, type Resolver } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useEffect, useRef } from "react"
@@ -96,7 +96,7 @@ const alumnoSchema = z.object({
 function EditAlumnoSheet({ alumno, onSaved }: Readonly<{ alumno: import("@/services/alumnos").AlumnoRead; onSaved: () => void }>) {
   const updateMutation = useUpdateAlumno()
   const form = useForm<import("@/services/alumnos").AlumnoUpdate>({
-    resolver: zodResolver(alumnoSchema) as any,
+    resolver: zodResolver(alumnoSchema) as Resolver<import("@/services/alumnos").AlumnoUpdate>,
     defaultValues: {
       nombreAlumno: alumno.nombreAlumno,
       aPaterno: alumno.aPaterno,

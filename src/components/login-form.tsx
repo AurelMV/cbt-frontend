@@ -38,7 +38,7 @@ export function LoginForm({
       toast.success("Bienvenido", { description: `${user.name} (${user.role})` })
       if (user.role === "admin") navigate("/admin")
       else navigate("/asistencias")
-    } catch (err) {
+    } catch {
       toast.error("Credenciales inválidas")
     } finally {
       setLoading(false)

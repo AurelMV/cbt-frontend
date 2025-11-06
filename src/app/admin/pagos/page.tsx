@@ -6,7 +6,7 @@ import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { toast } from "sonner"
 import { usePagos, useUpdatePago } from "@/hooks/use-pagos"
-import { useForm } from "react-hook-form"
+import { useForm, type Resolver } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Field, FieldContent, FieldError, FieldLabel } from "@/components/ui/field"
@@ -89,7 +89,7 @@ function EditPagoSheet({ pago, onSaved }: Readonly<{ pago: import("@/services/pa
   const updateMutation = useUpdatePago()
   const closeRef = useRef<HTMLButtonElement | null>(null)
   const form = useForm<import("@/services/pagos").PagoUpdate>({
-    resolver: zodResolver(pagoSchema) as any,
+    resolver: zodResolver(pagoSchema) as unknown as Resolver<import("@/services/pagos").PagoUpdate>,
     defaultValues: {
       nroVoucher: pago.nroVoucher,
       fecha: pago.fecha,

@@ -68,7 +68,7 @@ export default function Page() {
   const [colegios, setColegios] = useState<Colegio[]>([])
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(schema) as any,
+    resolver: zodResolver(schema) as unknown as import("react-hook-form").Resolver<FormValues>,
     defaultValues: {
       sexo: "M",
       medioPago: "deposito",
@@ -93,8 +93,9 @@ export default function Page() {
   // Mostrar solo ciclos activos (estado === true)
   setCiclos(cics.filter((c: Ciclo) => c.estado === true))
         setDepartamentos(deps)
-      } catch (e: any) {
-        toast.error("No se pudieron cargar catálogos", { description: e.message })
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Error desconocido"
+        toast.error("No se pudieron cargar catálogos", { description: msg })
       }
     })()
   }, [])
@@ -162,8 +163,9 @@ export default function Page() {
 
       toast.success("Inscripción enviada", { description: `Referencia #${pre.id} - ${values.nombreAlumno}` })
       clear(); form.reset()
-    } catch (e: any) {
-      toast.error("No se pudo enviar la inscripción", { description: e.message })
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Error desconocido"
+      toast.error("No se pudo enviar la inscripción", { description: msg })
     } finally {
       setSubmitting(false)
     }
@@ -216,7 +218,7 @@ export default function Page() {
             <Field>
               <FieldLabel>Sexo</FieldLabel>
               <FieldContent>
-                <Select value={form.watch("sexo")} onValueChange={(v) => form.setValue("sexo", v as any, { shouldValidate: true })}>
+                <Select value={form.watch("sexo")} onValueChange={(v) => form.setValue("sexo", v as FormValues["sexo"], { shouldValidate: true })}>
                   <SelectTrigger><SelectValue placeholder="Seleccione…" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="M">Masculino</SelectItem>
@@ -357,7 +359,7 @@ export default function Page() {
             <Field>
               <FieldLabel>Medio de pago</FieldLabel>
               <FieldContent>
-                <Select value={form.watch("medioPago")} onValueChange={(v) => form.setValue("medioPago", v as any, { shouldValidate: true })}>
+                <Select value={form.watch("medioPago")} onValueChange={(v) => form.setValue("medioPago", v as FormValues["medioPago"], { shouldValidate: true })}>
                   <SelectTrigger><SelectValue placeholder="Seleccione…" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="deposito">Depósito</SelectItem>
@@ -371,7 +373,7 @@ export default function Page() {
             <Field>
               <FieldLabel>Tipo de pago</FieldLabel>
               <FieldContent>
-                <Select value={form.watch("TipoPago")} onValueChange={(v) => form.setValue("TipoPago", v as any, { shouldValidate: true })}>
+                <Select value={form.watch("TipoPago")} onValueChange={(v) => form.setValue("TipoPago", v as FormValues["TipoPago"], { shouldValidate: true })}>
                   <SelectTrigger><SelectValue placeholder="Seleccione…" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="inscripcion">Inscripción</SelectItem>
