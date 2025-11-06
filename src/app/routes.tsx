@@ -15,7 +15,10 @@ const AdminInscripciones = lazy(() => import("@/app/admin/inscripciones/page"))
 const AdminPagos = lazy(() => import("@/app/admin/pagos/page"))
 const AdminProgramas = lazy(() => import("@/app/admin/programas/page"))
 const AdminCiclos = lazy(() => import("@/app/admin/ciclos/page"))
+const AdminGrupos = lazy(() => import("@/app/admin/grupos/page"))
 const AdminAsistencias = lazy(() => import("@/app/admin/asistencias/page"))
+const AdminClases = lazy(() => import("@/app/admin/clases/page"))
+const AdminAlumnos = lazy(() => import("@/app/admin/alumnos/page"))
 const AdminReportes = lazy(() => import("@/app/admin/reportes/page"))
 const AdminUsuario = lazy(() => import("@/app/admin/usuario/page"))
 const AdminAuditoria = lazy(() => import("@/app/admin/auditoria/page"))
@@ -24,7 +27,7 @@ function Fallback() {
   return <div className="p-6"><Skeleton className="h-8 w-40 mb-4" /><Skeleton className="h-24 w-full" /></div>
 }
 
-function RequireRole({ roles, children }: { roles: Array<"admin" | "docente">, children: React.ReactNode }) {
+function RequireRole({ roles, children }: Readonly<{ roles: Array<"admin" | "docente">; children: React.ReactNode }>) {
   const user = useAuth((s) => s.user)
   if (!user || (roles.length && !roles.includes(user.role))) {
     return <Navigate to="/login" replace />
@@ -49,7 +52,10 @@ export function AppRoutes() {
               <Route path="pagos" element={<AdminPagos />} />
               <Route path="programas" element={<AdminProgramas />} />
               <Route path="ciclos" element={<AdminCiclos />} />
+              <Route path="grupos" element={<AdminGrupos />} />
               <Route path="asistencias" element={<AdminAsistencias />} />
+              <Route path="clases" element={<AdminClases />} />
+              <Route path="alumnos" element={<AdminAlumnos />} />
               <Route path="reportes" element={<AdminReportes />} />
               <Route path="usuario" element={<AdminUsuario />} />
               <Route path="auditoria" element={<AdminAuditoria />} />

@@ -42,19 +42,19 @@ export type BandejaCounts = {
 }
 
 export async function getCounts() {
-  return api.get<BandejaCounts>("/bandeja/counts")
+  return api.get<BandejaCounts>("/bandeja/counts", { silentError: true })
 }
 
 export async function listPreinsPendientes() {
-  return api.get<BandejaPreItem[]>("/bandeja/preinscripciones")
+  return api.get<BandejaPreItem[]>("/bandeja/preinscripciones", { silentError: true })
 }
 
 export async function aprobarPreinscripcion(preId: number, payload: { idGrupo: number; idClase: number }) {
-  return api.post(`/bandeja/preinscripciones/${preId}/aprobar`, payload)
+  return api.post(`/bandeja/preinscripciones/${preId}/aprobar`, payload, { silentError: true })
 }
 
 export async function rechazarPreinscripcion(preId: number) {
-  return api.post(`/bandeja/preinscripciones/${preId}/rechazar`, {})
+  return api.post(`/bandeja/preinscripciones/${preId}/rechazar`, {}, { silentError: true })
 }
 
 export type BandejaPagoItem = {
@@ -83,13 +83,13 @@ export type BandejaPagoItem = {
 }
 
 export async function listPagosPendientes() {
-  return api.get<BandejaPagoItem[]>("/bandeja/pagos")
+  return api.get<BandejaPagoItem[]>("/bandeja/pagos", { silentError: true })
 }
 
 export async function aprobarPago(id: number) {
-  return api.post(`/bandeja/pagos/${id}/aprobar`, {})
+  return api.post(`/bandeja/pagos/${id}/aprobar`, {}, { silentError: true })
 }
 
 export async function rechazarPago(id: number) {
-  return api.post(`/bandeja/pagos/${id}/rechazar`, {})
+  return api.post(`/bandeja/pagos/${id}/rechazar`, {}, { silentError: true })
 }

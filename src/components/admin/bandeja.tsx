@@ -23,14 +23,14 @@ export function BandejaButton({
   className,
   icon,
   trigger,
-}: {
+}: Readonly<{
   label?: string
   variant?: ButtonVariant
   size?: ButtonSize
   className?: string
   icon?: React.ReactNode
   trigger?: React.ReactNode
-}) {
+}>) {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState("inscripciones")
 
@@ -99,9 +99,7 @@ export function BandejaButton({
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <div className="relative inline-flex w-full">
-          {trigger ? (
-            trigger
-          ) : (
+          {trigger ?? (
             <Button variant={variant} size={size} className={className}>
               {icon}
               {size === "icon" ? <span className="sr-only">{label}</span> : label}
@@ -248,9 +246,9 @@ export function BandejaButton({
 
             <TabsContent value="pagos" className="mt-4 space-y-4">
               <div>
-                <label className="text-sm">Ciclo</label>
+                <label className="text-sm" htmlFor="cicloFiltro">Ciclo</label>
                 <Select value={cicloFiltroPagos} onValueChange={setCicloFiltroPagos}>
-                  <SelectTrigger className="w-40">
+                  <SelectTrigger id="cicloFiltro" className="w-40">
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent>
@@ -300,7 +298,7 @@ export function BandejaButton({
                               <div>
                                 <div className="font-medium mb-2">Evidencia</div>
                                 {item.pago.foto ? (
-                                  <img src={item.pago.foto as string} alt="Evidencia" className="max-h-72 rounded border" />
+                                  <img src={item.pago.foto} alt="Evidencia" className="max-h-72 rounded border" />
                                 ) : (
                                   <div className="text-muted-foreground">Sin imagen</div>
                                 )}

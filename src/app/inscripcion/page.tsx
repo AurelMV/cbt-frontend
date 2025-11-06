@@ -11,11 +11,10 @@ import { useAutoSaveForm } from "@/hooks/use-autosave-form"
 import { Toaster } from "@/components/ui/sonner"
 import { toast } from "sonner"
 import FileUploader from "@/components/common/file-uploader"
-import { getProgramas } from "@/services/programas"
+import { getProgramas, type ProgramaRead } from "@/services/programas"
 import { getCiclos } from "@/services/ciclos"
 import { getGruposPorCiclo } from "@/services/grupos"
 import { getDepartamentos, getProvinciasPorDepartamento, getDistritosPorProvincia, getColegiosPorDistrito } from "@/services/ubicacion"
-import type { Programa } from "@/services/programas"
 import type { Ciclo } from "@/services/ciclos"
 import type { Grupo } from "@/services/grupos"
 import type { Departamento, Distrito, Provincia, Colegio } from "@/services/ubicacion"
@@ -30,7 +29,7 @@ const schema = z.object({
   aMaterno: z.string().min(2).max(100),
   fechaNacimiento: z.string().refine((v) => !Number.isNaN(new Date(v).getTime()), { message: "Fecha inválida" }),
   sexo: z.enum(["M", "F"]).default("M"),
-  email: z.string().email(),
+  email: z.string().refine((v) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v), { message: "Email inválido" }),
   telefonoEstudiante: z.string().min(7).max(15),
   telefonoApoderado: z.string().min(7).max(15),
   Direccion: z.string().min(3).max(200),
@@ -60,7 +59,7 @@ type FormValues = z.infer<typeof schema>
 
 export default function Page() {
   const [submitting, setSubmitting] = useState(false)
-  const [programas, setProgramas] = useState<Programa[]>([])
+  const [programas, setProgramas] = useState<ProgramaRead[]>([])
   const [ciclos, setCiclos] = useState<Ciclo[]>([])
   const [grupos, setGrupos] = useState<Grupo[]>([])
   const [departamentos, setDepartamentos] = useState<Departamento[]>([])
@@ -91,8 +90,8 @@ export default function Page() {
       try {
         const [progs, cics, deps] = await Promise.all([getProgramas(), getCiclos(), getDepartamentos()])
         setProgramas(progs)
-        // Mostrar solo ciclos activos (estado === true)
-        setCiclos(cics.filter(c => c.estado === true))
+  // Mostrar solo ciclos activos (estado === true)
+  setCiclos(cics.filter((c: Ciclo) => c.estado === true))
         setDepartamentos(deps)
       } catch (e: any) {
         toast.error("No se pudieron cargar catálogos", { description: e.message })
@@ -386,12 +385,17 @@ export default function Page() {
             <Field>
               <FieldLabel>Evidencia de pago (PDF/JPG/PNG, ≤ 5MB)</FieldLabel>
               <FieldContent>
-                <FileUploader
+                {(() => {
+                  const docVal = form.getValues("documento")
+                  const documentoFile = docVal instanceof File ? docVal : null
+                  return (
+                    <FileUploader
                   accept=".pdf,.jpg,.jpeg,.png"
                   maxSizeMB={5}
-                  value={form.getValues("documento") as File | undefined as File | null}
+                  value={documentoFile}
                   onChange={(file) => form.setValue("documento", file ?? undefined)}
-                />
+                />)
+                })()}
               </FieldContent>
             </Field>
           </FieldGroup>

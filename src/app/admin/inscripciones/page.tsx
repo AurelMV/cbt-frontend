@@ -6,54 +6,190 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { toast } from "sonner"
-// Bandeja ahora vive en el sidebar; no se muestra aquí
-
-type Estado = "pendiente" | "aprobado" | "rechazado"
-type Acceso = "habilitado" | "bloqueado"
-type Inscrito = {
-  id: string
-  ciclo: string
-  nombre: string
-  dni: string
-  email: string
-  programa: string
-  grupo?: string
-  clase?: string
-  estado: Estado
-  acceso: Acceso
-}
-
-const DATA: Inscrito[] = [
-  { id: "I-001", ciclo: "2025-2", nombre: "Ana Pérez", dni: "12345678", email: "ana@example.com", programa: "Programa 1", grupo: "A", estado: "pendiente", acceso: "habilitado" },
-  { id: "I-002", ciclo: "2025-2", nombre: "Juan Díaz", dni: "87654321", email: "juan@example.com", programa: "Programa 2", grupo: "B", estado: "aprobado", acceso: "habilitado" },
-  { id: "I-010", ciclo: "2025-1", nombre: "María López", dni: "11223344", email: "maria@example.com", programa: "Programa 1", grupo: "A", estado: "rechazado", acceso: "bloqueado" },
-]
+import { useInscripciones, useCreateInscripcion, useUpdateInscripcion } from "@/hooks/use-inscripciones"
+import { useAlumnos } from "@/hooks/use-alumnos"
+import { useCiclos } from "@/hooks/use-ciclos"
+import { useClases } from "@/hooks/use-clases"
+import { useProgramas } from "@/hooks/use-programas"
+import type { InscripcionRead } from "@/services/inscripciones"
+import { useForm, Controller } from "react-hook-form"
+import { z } from "zod"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { Field, FieldContent, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field"
 
 export default function Page() {
-  // Comenzar sin ciclo seleccionado; pedir selección antes de mostrar la tabla
+  const EMAIL_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+  const inscQ = useInscripciones()
+  const createInsc = useCreateInscripcion()
+  // edit mutation se usa en componente local de edición
+  const alumnosQ = useAlumnos()
+  const ciclosQ = useCiclos()
+  // const gruposQ = useGrupos()
+  const clasesQ = useClases()
+  const programasQ = useProgramas()
+
   const [ciclo, setCiclo] = useState("")
-  // Usar un valor no vacío para evitar error de Radix Select cuando hay un <SelectItem value="">
-  const [estado, setEstado] = useState<string>("all")
-  const [grupo, setGrupo] = useState("")
   const [q, setQ] = useState("")
-  const [rows, setRows] = useState<Inscrito[]>(DATA)
-  const [edit, setEdit] = useState<Inscrito | null>(null)
+  const [edit, setEdit] = useState<InscripcionRead | null>(null)
+  const [openCreate, setOpenCreate] = useState(false)
 
+  // Schemas de validación
+  const alumnoSchema = z.object({
+    nombreAlumno: z.string().min(1, "Nombre requerido"),
+    aPaterno: z.string().min(1, "Apellido paterno requerido"),
+    aMaterno: z.string().optional().default(""),
+    sexo: z.enum(["M", "F"]).default("M"),
+    telefonoEstudiante: z.string().optional().default(""),
+    telefonoApoderado: z.string().optional().default(""),
+    fechaNacimiento: z.string().optional().default(""),
+    email: z.union([z.string().regex(EMAIL_REGEX, "Email inválido"), z.literal("")]),
+    anoCulminado: z.coerce.number().int().min(1900).max(2100).default(new Date().getFullYear()),
+    Direccion: z.string().optional().default(""),
+    nroDocumento: z.string().min(8, "DNI inválido"),
+    idColegio: z.coerce.number().nonnegative().default(0),
+  })
+
+  const inscSchema = z.object({
+    idPrograma: z.coerce.number().min(1, "Seleccione programa"),
+    idCiclo: z.coerce.number().min(1, "Seleccione ciclo"),
+    idClase: z.coerce.number().min(1, "Seleccione clase"),
+    Codigo: z.string().min(1, "Código requerido"),
+    turno: z.string().min(1, "Turno requerido"),
+    fecha: z.string().min(1, "Fecha requerida"),
+    Estado: z.boolean().default(true),
+    EstadoPago: z.string().default("pendiente"),
+    TipoPago: z.string().default("inscripcion"),
+  })
+
+  const pagoSchema = z.object({
+    nroVoucher: z.string().min(1, "Comprobante requerido"),
+    medioPago: z.string().min(1, "Medio requerido"),
+    monto: z.coerce.number().positive("Monto debe ser > 0"),
+    fecha: z.string().min(1, "Fecha requerida"),
+    archivo: z.any().optional().nullable(),
+  })
+
+  const createSchema = z.object({
+    crearAlumno: z.boolean().default(false),
+    alumnoSel: z.string().optional(),
+    alumno: alumnoSchema.optional(),
+    insc: inscSchema,
+    pagoNow: z.boolean().default(false),
+    pago: pagoSchema.optional(),
+  }).refine((d) => d.crearAlumno || (!!d.alumnoSel && d.alumnoSel !== ""), {
+    message: "Seleccione o cree un alumno",
+    path: ["alumnoSel"],
+  }).refine((d) => !d.pagoNow || !!d.pago, {
+    message: "Complete los datos de pago",
+    path: ["pago"],
+  })
+
+  const createForm = useForm({
+    resolver: zodResolver(createSchema),
+    defaultValues: {
+      crearAlumno: false,
+      alumnoSel: "",
+      alumno: {
+        nombreAlumno: "",
+        aPaterno: "",
+        aMaterno: "",
+        sexo: "M",
+        telefonoEstudiante: "",
+        telefonoApoderado: "",
+        fechaNacimiento: "",
+        email: "",
+        anoCulminado: new Date().getFullYear(),
+        Direccion: "",
+        nroDocumento: "",
+        idColegio: 0,
+      },
+      insc: {
+        turno: "mañana",
+        fecha: new Date().toISOString().slice(0, 10),
+        Estado: true,
+        idPrograma: 0,
+        idCiclo: 0,
+        idClase: 0,
+        Codigo: "",
+        EstadoPago: "pendiente",
+        TipoPago: "inscripcion",
+      },
+      pagoNow: false,
+      pago: {
+        nroVoucher: "",
+        medioPago: "deposito",
+        monto: 0,
+        fecha: new Date().toISOString().slice(0, 10),
+        archivo: null,
+      },
+    },
+  })
+
+  const rows = inscQ.data ?? []
   const filtrados = useMemo(() => {
-    return rows.filter(r => (
-      (!ciclo || r.ciclo === ciclo) &&
-      (estado === "all" || r.estado === estado) &&
-      (!grupo || (r.grupo || "").toLowerCase().includes(grupo.toLowerCase())) &&
-      (!q || [r.nombre, r.dni].some(f => f.toLowerCase().includes(q.toLowerCase())))
-    ))
-  }, [rows, ciclo, estado, grupo, q])
+    return rows.filter(r => (!ciclo || String(r.idCiclo) === ciclo) && (!q || String(r.id).includes(q) || r.Codigo.toLowerCase().includes(q.toLowerCase())))
+  }, [rows, ciclo, q])
 
-  const guardarEdicion = () => {
-    if (!edit) return
-    setRows(prev => prev.map(r => r.id === edit.id ? edit : r))
-    toast.success("Estudiante actualizado")
-    setEdit(null)
-  }
+  // edición se maneja con EditInscripcionForm
+
+  const onSubmitCrear = createForm.handleSubmit(async (data) => {
+    try {
+      // 1) Alumno
+      let idAlumno = Number(data.alumnoSel) || 0
+      if (data.crearAlumno) {
+        const res = await (await import("@/services/alumnos")).crearAlumno({
+          nombreAlumno: data.alumno?.nombreAlumno ?? "",
+          aPaterno: data.alumno?.aPaterno ?? "",
+          aMaterno: data.alumno?.aMaterno ?? "",
+          sexo: data.alumno?.sexo ?? "M",
+          telefonoEstudiante: data.alumno?.telefonoEstudiante ?? "",
+          telefonoApoderado: data.alumno?.telefonoApoderado ?? "",
+          fechaNacimiento: data.alumno?.fechaNacimiento ?? "",
+          email: data.alumno?.email ?? "",
+          anoCulminado: data.alumno?.anoCulminado ?? new Date().getFullYear(),
+          Direccion: data.alumno?.Direccion ?? "",
+          nroDocumento: data.alumno?.nroDocumento ?? "",
+          idColegio: data.alumno?.idColegio ?? 0,
+        })
+        idAlumno = res.id
+      }
+      if (!idAlumno) { toast.error("Seleccione o cree un alumno"); return }
+
+      // 2) Inscripción
+      const insc = await createInsc.mutateAsync({ ...data.insc, idAlumno })
+
+      // 3) Pago opcional
+      if (data.pagoNow && data.pago) {
+        let foto: string | null = null
+        const file: File | null | undefined = (data.pago as any).archivo
+        if (file instanceof File) {
+          foto = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("No se pudo leer archivo"))
+            reader.onerror = () => reject(new Error("No se pudo leer archivo"))
+            reader.readAsDataURL(file)
+          })
+        }
+        await (await import("@/services/pagos")).crearPago({
+          nroVoucher: data.pago.nroVoucher,
+          medioPago: data.pago.medioPago,
+          monto: data.pago.monto,
+          fecha: data.pago.fecha,
+          idInscripcion: insc.id,
+          foto,
+          Estado: false,
+        })
+      }
+
+      toast.success("Inscripción creada")
+      setOpenCreate(false)
+      createForm.reset()
+      inscQ.refetch()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "No se pudo crear la inscripción"
+      toast.error(msg)
+    }
+  })
 
   // Acciones de estado/accso removidas según requerimiento; solo queda "Editar"
 
@@ -62,79 +198,300 @@ export default function Page() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Gestión de Inscripciones</CardTitle>
+          <Sheet open={openCreate} onOpenChange={setOpenCreate}>
+            <SheetTrigger asChild>
+              <Button>Nueva inscripción</Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full sm:max-w-xl">
+              <SheetHeader>
+                <SheetTitle>Nueva inscripción</SheetTitle>
+              </SheetHeader>
+              <div className="p-4">
+                <form onSubmit={onSubmitCrear} className="space-y-6">
+                  <FieldSet>
+                    <FieldLegend>Alumno</FieldLegend>
+                    <FieldGroup>
+                      <Field>
+                        <FieldLabel htmlFor="crearAlumno">
+                          <div className="flex items-center gap-2">
+                            <input id="crearAlumno" type="checkbox" {...createForm.register("crearAlumno")} />
+                            <span>Crear nuevo alumno</span>
+                          </div>
+                        </FieldLabel>
+                      </Field>
+                      {!createForm.watch("crearAlumno") && (
+                        <Field>
+                          <FieldLabel htmlFor="alumnoSel">Alumno existente</FieldLabel>
+                          <FieldContent>
+                            <Controller
+                              control={createForm.control}
+                              name="alumnoSel"
+                              render={({ field }) => (
+                                <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                                  <SelectTrigger id="alumnoSel">
+                                    <SelectValue placeholder={alumnosQ.isLoading ? "Cargando…" : "Seleccione"} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {(alumnosQ.data ?? []).map(a => (
+                                      <SelectItem key={a.id} value={String(a.id)}>{a.nombreAlumno} {a.aPaterno}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            />
+                            <FieldError errors={[createForm.formState.errors.alumnoSel]} />
+                          </FieldContent>
+                        </Field>
+                      )}
+                      {createForm.watch("crearAlumno") && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <Field>
+                            <FieldLabel htmlFor="alNombre">Nombre</FieldLabel>
+                            <FieldContent>
+                              <Input id="alNombre" {...createForm.register("alumno.nombreAlumno")} />
+                              <FieldError errors={[createForm.formState.errors.alumno?.nombreAlumno]} />
+                            </FieldContent>
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor="alAPaterno">Apellido paterno</FieldLabel>
+                            <FieldContent>
+                              <Input id="alAPaterno" {...createForm.register("alumno.aPaterno")} />
+                              <FieldError errors={[createForm.formState.errors.alumno?.aPaterno]} />
+                            </FieldContent>
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor="alDni">DNI</FieldLabel>
+                            <FieldContent>
+                              <Input id="alDni" {...createForm.register("alumno.nroDocumento")} />
+                              <FieldError errors={[createForm.formState.errors.alumno?.nroDocumento]} />
+                            </FieldContent>
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor="alEmail">Email</FieldLabel>
+                            <FieldContent>
+                              <Input id="alEmail" type="email" {...createForm.register("alumno.email")} />
+                              <FieldError errors={[createForm.formState.errors.alumno?.email]} />
+                            </FieldContent>
+                          </Field>
+                        </div>
+                      )}
+                    </FieldGroup>
+                  </FieldSet>
+
+                  <FieldSet>
+                    <FieldLegend>Inscripción</FieldLegend>
+                    <FieldGroup>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Field>
+                          <FieldLabel htmlFor="programaSel">Programa</FieldLabel>
+                          <FieldContent>
+                            <Controller
+                              control={createForm.control}
+                              name="insc.idPrograma"
+                              render={({ field }) => {
+                                let selVal = ""
+                                if (typeof field.value === "number") selVal = String(field.value)
+                                else if (typeof field.value === "string") selVal = field.value
+                                return (
+                                <Select value={selVal} onValueChange={(v) => field.onChange(Number(v))}>
+                                  <SelectTrigger id="programaSel"><SelectValue placeholder={programasQ.isLoading ? "Cargando…" : "Seleccione"} /></SelectTrigger>
+                                  <SelectContent>
+                                    {(programasQ.data ?? []).map(p => (<SelectItem key={p.id} value={String(p.id)}>{p.nombrePrograma}</SelectItem>))}
+                                  </SelectContent>
+                                </Select>
+                                )
+                              }}
+                            />
+                            <FieldError errors={[createForm.formState.errors.insc?.idPrograma]} />
+                          </FieldContent>
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="cicloSel">Ciclo</FieldLabel>
+                          <FieldContent>
+                            <Controller
+                              control={createForm.control}
+                              name="insc.idCiclo"
+                              render={({ field }) => {
+                                let selVal = ""
+                                if (typeof field.value === "number") selVal = String(field.value)
+                                else if (typeof field.value === "string") selVal = field.value
+                                return (
+                                <Select value={selVal} onValueChange={(v) => field.onChange(Number(v))}>
+                                  <SelectTrigger id="cicloSel"><SelectValue placeholder={ciclosQ.isLoading ? "Cargando…" : "Seleccione"} /></SelectTrigger>
+                                  <SelectContent>
+                                    {(ciclosQ.data ?? []).map(c => (<SelectItem key={c.id} value={String(c.id)}>{c.nombreCiclo}</SelectItem>))}
+                                  </SelectContent>
+                                </Select>
+                                )
+                              }}
+                            />
+                            <FieldError errors={[createForm.formState.errors.insc?.idCiclo]} />
+                          </FieldContent>
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="claseSel">Clase</FieldLabel>
+                          <FieldContent>
+                            <Controller
+                              control={createForm.control}
+                              name="insc.idClase"
+                              render={({ field }) => {
+                                let selVal = ""
+                                if (typeof field.value === "number") selVal = String(field.value)
+                                else if (typeof field.value === "string") selVal = field.value
+                                return (
+                                <Select value={selVal} onValueChange={(v) => field.onChange(Number(v))}>
+                                  <SelectTrigger id="claseSel"><SelectValue placeholder={clasesQ.isLoading ? "Cargando…" : "Seleccione"} /></SelectTrigger>
+                                  <SelectContent>
+                                    {(clasesQ.data ?? []).map(c => (<SelectItem key={c.id} value={String(c.id)}>{c.codigoClase}</SelectItem>))}
+                                  </SelectContent>
+                                </Select>
+                                )
+                              }}
+                            />
+                            <FieldError errors={[createForm.formState.errors.insc?.idClase]} />
+                          </FieldContent>
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="codigoInsc">Código</FieldLabel>
+                          <FieldContent>
+                            <Input id="codigoInsc" {...createForm.register("insc.Codigo")} />
+                            <FieldError errors={[createForm.formState.errors.insc?.Codigo]} />
+                          </FieldContent>
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="turnoInsc">Turno</FieldLabel>
+                          <FieldContent>
+                            <Input id="turnoInsc" {...createForm.register("insc.turno")} />
+                            <FieldError errors={[createForm.formState.errors.insc?.turno]} />
+                          </FieldContent>
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="fechaInsc">Fecha</FieldLabel>
+                          <FieldContent>
+                            <Input id="fechaInsc" type="date" {...createForm.register("insc.fecha")} />
+                            <FieldError errors={[createForm.formState.errors.insc?.fecha]} />
+                          </FieldContent>
+                        </Field>
+                      </div>
+                    </FieldGroup>
+                  </FieldSet>
+
+                  <FieldSet>
+                    <FieldLegend>Pago (opcional)</FieldLegend>
+                    <FieldGroup>
+                      <Field>
+                        <FieldLabel htmlFor="pagoNow">
+                          <div className="flex items-center gap-2">
+                            <input id="pagoNow" type="checkbox" {...createForm.register("pagoNow")} />
+                            <span>Registrar pago ahora</span>
+                          </div>
+                        </FieldLabel>
+                      </Field>
+                      {createForm.watch("pagoNow") && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <Field>
+                            <FieldLabel htmlFor="nroVoucher">Comprobante</FieldLabel>
+                            <FieldContent>
+                              <Input id="nroVoucher" {...createForm.register("pago.nroVoucher")} />
+                              <FieldError errors={[createForm.formState.errors.pago?.nroVoucher]} />
+                            </FieldContent>
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor="fechaPago">Fecha</FieldLabel>
+                            <FieldContent>
+                              <Input id="fechaPago" type="date" {...createForm.register("pago.fecha")} />
+                              <FieldError errors={[createForm.formState.errors.pago?.fecha]} />
+                            </FieldContent>
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor="montoPago">Monto</FieldLabel>
+                            <FieldContent>
+                              <Input id="montoPago" type="number" min={0} step="0.01" {...createForm.register("pago.monto", { valueAsNumber: true })} />
+                              <FieldError errors={[createForm.formState.errors.pago?.monto]} />
+                            </FieldContent>
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor="medioPago">Medio</FieldLabel>
+                            <FieldContent>
+                              <Input id="medioPago" {...createForm.register("pago.medioPago")} />
+                              <FieldError errors={[createForm.formState.errors.pago?.medioPago]} />
+                            </FieldContent>
+                          </Field>
+                          <Field className="md:col-span-2">
+                            <FieldLabel htmlFor="archivoPago">Evidencia (imagen/pdf)</FieldLabel>
+                            <FieldContent>
+                              <Controller
+                                control={createForm.control}
+                                name="pago.archivo"
+                                render={({ field }) => (
+                                  <Input id="archivoPago" type="file" accept="image/*,application/pdf" onChange={(e) => field.onChange(e.target.files?.[0] ?? null)} />
+                                )}
+                              />
+                            </FieldContent>
+                          </Field>
+                        </div>
+                      )}
+                    </FieldGroup>
+                  </FieldSet>
+
+                  <div className="flex gap-2">
+                    <Button type="submit" disabled={createInsc.isPending}>{createInsc.isPending ? "Creando…" : "Crear"}</Button>
+                    <Button type="button" variant="outline" onClick={() => setOpenCreate(false)}>Cancelar</Button>
+                  </div>
+                </form>
+              </div>
+            </SheetContent>
+          </Sheet>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Selección de ciclo (obligatoria antes de ver la tabla) */}
+
+          {/* Selección de ciclo para listar */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="text-sm">Ciclo</label>
+              <label className="text-sm" htmlFor="cicloList">Ciclo</label>
               <Select value={ciclo} onValueChange={setCiclo}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona un ciclo" />
+                <SelectTrigger id="cicloList">
+                  <SelectValue placeholder={ciclosQ.isLoading ? "Cargando…" : "Selecciona un ciclo"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="2025-1">2025-1</SelectItem>
-                  <SelectItem value="2025-2">2025-2</SelectItem>
+                  {(ciclosQ.data ?? []).map(c => (<SelectItem key={c.id} value={String(c.id)}>{c.nombreCiclo}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          {/* Filtros adicionales visibles solo cuando hay ciclo */}
-          {ciclo && (
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-              <div>
-                <label className="text-sm">Estado</label>
-                <Select value={estado} onValueChange={setEstado}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="pendiente">Pendiente</SelectItem>
-                    <SelectItem value="aprobado">Aprobado</SelectItem>
-                    <SelectItem value="rechazado">Rechazado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm">Grupo</label>
-                <Input value={grupo} onChange={(e) => setGrupo(e.target.value)} placeholder="A/B/C…" />
-              </div>
-              <div className="md:col-span-3 md:col-start-3">
-                <label className="text-sm">Buscar (Nombre o DNI)</label>
-                <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ej. Ana o 12345678" />
-              </div>
+          {/* Búsqueda simple */
+          }
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-2">
+              <label className="text-sm" htmlFor="buscarInsc">Buscar (ID o Código)</label>
+              <Input id="buscarInsc" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ej. 10 o ABC123" />
             </div>
-          )}
+          </div>
 
           {/* Tabla visible solo cuando hay ciclo seleccionado; si no, mostrar indicación */}
-          {!ciclo ? (
-            <div className="text-sm text-muted-foreground p-3 border rounded-md">
-              Selecciona un ciclo para ver las inscripciones.
-            </div>
-          ) : (
+          {ciclo ? (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>DNI</TableHead>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Código</TableHead>
+                  <TableHead>Alumno</TableHead>
                   <TableHead>Programa</TableHead>
-                  <TableHead>Grupo</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Acceso</TableHead>
+                  <TableHead>Ciclo</TableHead>
+                  <TableHead>Clase</TableHead>
                   <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtrados.map((r) => (
                   <TableRow key={r.id}>
-                    <TableCell>{r.nombre}</TableCell>
-                    <TableCell>{r.dni}</TableCell>
-                    <TableCell>{r.programa}</TableCell>
-                    <TableCell>{r.grupo || "-"}</TableCell>
-                    <TableCell className="capitalize">{r.estado}</TableCell>
-                    <TableCell className="capitalize">{r.acceso}</TableCell>
+                    <TableCell>{r.id}</TableCell>
+                    <TableCell>{r.Codigo}</TableCell>
+                    <TableCell>#{r.idAlumno}</TableCell>
+                    <TableCell>#{r.idPrograma}</TableCell>
+                    <TableCell>#{r.idCiclo}</TableCell>
+                    <TableCell>#{r.idClase}</TableCell>
                     <TableCell>
                       <div className="flex gap-2">
                         <Sheet open={edit?.id === r.id} onOpenChange={(open) => setEdit(open ? r : null)}>
@@ -143,28 +500,9 @@ export default function Page() {
                           </SheetTrigger>
                           <SheetContent side="right">
                             <SheetHeader>
-                              <SheetTitle>Editar estudiante</SheetTitle>
+                              <SheetTitle>Editar inscripción</SheetTitle>
                             </SheetHeader>
-                            {edit && (
-                              <div className="p-4 space-y-3">
-                                <div>
-                                  <label className="text-sm">Nombre</label>
-                                  <Input value={edit.nombre} onChange={(e) => setEdit({ ...edit, nombre: e.target.value })} />
-                                </div>
-                                <div>
-                                  <label className="text-sm">Email</label>
-                                  <Input type="email" value={edit.email} onChange={(e) => setEdit({ ...edit, email: e.target.value })} />
-                                </div>
-                                <div>
-                                  <label className="text-sm">Grupo</label>
-                                  <Input value={edit.grupo || ""} onChange={(e) => setEdit({ ...edit, grupo: e.target.value })} />
-                                </div>
-                                <div className="flex gap-2 pt-2">
-                                  <Button onClick={guardarEdicion}>Guardar</Button>
-                                  <Button variant="outline" onClick={() => setEdit(null)}>Cancelar</Button>
-                                </div>
-                              </div>
-                            )}
+                            {edit && <EditInscripcionForm value={edit} onCancel={() => setEdit(null)} onSaved={() => { setEdit(null); inscQ.refetch() }} />}
                           </SheetContent>
                         </Sheet>
                       </div>
@@ -173,9 +511,73 @@ export default function Page() {
                 ))}
               </TableBody>
             </Table>
+          ) : (
+            <div className="text-sm text-muted-foreground p-3 border rounded-md">
+              Selecciona un ciclo para ver las inscripciones.
+            </div>
           )}
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+// Componente de edición con validación mínima (Código y Fecha)
+function EditInscripcionForm({ value, onCancel, onSaved }: { readonly value: InscripcionRead; readonly onCancel: () => void; readonly onSaved: () => void }) {
+  const { mutateAsync } = useUpdateInscripcion()
+  const schema = z.object({
+    Codigo: z.string().min(1, "Código requerido"),
+    fecha: z.string().min(1, "Fecha requerida"),
+  })
+  type FormData = z.infer<typeof schema>
+  const form = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: { Codigo: value.Codigo, fecha: value.fecha },
+    values: { Codigo: value.Codigo, fecha: value.fecha },
+  })
+
+  const onSubmit = form.handleSubmit(async (data) => {
+    await mutateAsync({
+      id: value.id,
+      body: {
+        turno: value.turno,
+        fecha: data.fecha,
+        Estado: !!value.Estado,
+        idAlumno: value.idAlumno,
+        idPrograma: value.idPrograma,
+        idCiclo: value.idCiclo,
+        idClase: value.idClase,
+        Codigo: data.Codigo,
+        EstadoPago: value.EstadoPago,
+        TipoPago: value.TipoPago,
+      },
+    })
+    toast.success("Inscripción actualizada")
+    onSaved()
+  })
+
+  return (
+    <div className="p-4 space-y-4">
+      <form onSubmit={onSubmit} className="space-y-4">
+        <Field>
+          <FieldLabel htmlFor="editCodigo">Código</FieldLabel>
+          <FieldContent>
+            <Input id="editCodigo" {...form.register("Codigo")} />
+            <FieldError errors={[form.formState.errors.Codigo]} />
+          </FieldContent>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="editFecha">Fecha</FieldLabel>
+          <FieldContent>
+            <Input id="editFecha" type="date" {...form.register("fecha")} />
+            <FieldError errors={[form.formState.errors.fecha]} />
+          </FieldContent>
+        </Field>
+        <div className="flex gap-2 pt-2">
+          <Button type="submit">Guardar</Button>
+          <Button type="button" variant="outline" onClick={onCancel}>Cancelar</Button>
+        </div>
+      </form>
     </div>
   )
 }

@@ -1,39 +1,28 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { toast } from "sonner"
+import { usePagos, useUpdatePago } from "@/hooks/use-pagos"
+import { useForm } from "react-hook-form"
+import { z } from "zod"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { Field, FieldContent, FieldError, FieldLabel } from "@/components/ui/field"
 // Bandeja ahora vive en el sidebar; no se muestra aquí
 
-type Estado = "pendiente" | "aprobado" | "rechazado"
-type Pago = { id: string; ciclo: string; dni: string; nombre: string; monto: number; fecha: string; banco: string; comprobante: string; estado: Estado }
-
-const DATA: Pago[] = [
-  { id: "P-901", ciclo: "2025-2", dni: "12345678", nombre: "Ana Pérez", monto: 150, fecha: "2025-10-20", banco: "BCP", comprobante: "C-1001", estado: "pendiente" },
-  { id: "P-902", ciclo: "2025-2", dni: "87654321", nombre: "Juan Díaz", monto: 200, fecha: "2025-10-21", banco: "BBVA", comprobante: "C-1002", estado: "pendiente" },
-  { id: "P-800", ciclo: "2025-1", dni: "11223344", nombre: "María López", monto: 180, fecha: "2025-05-21", banco: "Interbank", comprobante: "C-9988", estado: "aprobado" },
-]
-
 export default function Page() {
-  // Filtrado por ciclo eliminado
+  const { data, isLoading, isError, refetch } = usePagos()
   const [q, setQ] = useState("")
-  const [rows, setRows] = useState<Pago[]>(DATA)
-  const [edit, setEdit] = useState<Pago | null>(null)
-  // Bandeja global: manejada por componente reutilizable
 
+  const rows = data ?? []
   const filtrados = useMemo(() => {
-    return rows.filter(r => (!q || [r.nombre, r.dni, r.comprobante].some(f => f.toLowerCase().includes(q.toLowerCase()))))
+    // Sin datos de nombre/dni en PagoRead, filtramos por comprobante y fecha
+    return rows.filter(r => (!q || [r.nroVoucher, r.fecha].some(f => f.toLowerCase().includes(q.toLowerCase()))))
   }, [rows, q])
 
-  // Acciones de aprobar/rechazar removidas, solo queda edición
-  const guardar = () => {
-    if (!edit) return
-    setRows(prev => prev.map(r => r.id === edit.id ? edit : r))
-    toast.success("Pago actualizado")
-    setEdit(null)
-  }
+  
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -44,8 +33,8 @@ export default function Page() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="md:col-span-3">
-              <label className="text-sm">Buscar (Nombre, DNI o Comprobante)</label>
-              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ej. Ana o 12345678 o C-1001" />
+              <label className="text-sm" htmlFor="qPagos">Buscar (Comprobante o Fecha)</label>
+              <Input id="qPagos" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ej. C-1001 o 2025-10-20" />
             </div>
           </div>
 
@@ -53,9 +42,7 @@ export default function Page() {
             <TableHeader>
               <TableRow>
                 <TableHead>ID</TableHead>
-                <TableHead>Estudiante</TableHead>
-                <TableHead>DNI</TableHead>
-                <TableHead>Ciclo</TableHead>
+                <TableHead>Inscripción</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Monto</TableHead>
                 <TableHead>Estado</TableHead>
@@ -63,51 +50,22 @@ export default function Page() {
               </TableRow>
             </TableHeader>
             <TableBody>
+              {isError && (
+                <TableRow><TableCell colSpan={6} className="text-red-600">No se pudieron cargar pagos.</TableCell></TableRow>
+              )}
+              {isLoading && (
+                <TableRow><TableCell colSpan={6}>Cargando…</TableCell></TableRow>
+              )}
               {filtrados.map((r) => (
                 <TableRow key={r.id}>
                   <TableCell>{r.id}</TableCell>
-                  <TableCell>{r.nombre}</TableCell>
-                  <TableCell>{r.dni}</TableCell>
-                  <TableCell>{r.ciclo}</TableCell>
+                  <TableCell>#{r.idInscripcion}</TableCell>
                   <TableCell>{r.fecha}</TableCell>
                   <TableCell>S/ {r.monto.toFixed(2)}</TableCell>
-                  <TableCell className="capitalize">{r.estado}</TableCell>
+                  <TableCell className="capitalize">{r.Estado ? "aprobado" : "pendiente"}</TableCell>
                   <TableCell>
                     <div className="flex gap-2">
-                      <Sheet open={edit?.id === r.id} onOpenChange={(open) => setEdit(open ? r : null)}>
-                        <SheetTrigger asChild>
-                          <Button size="sm" variant="outline">Editar</Button>
-                        </SheetTrigger>
-                        <SheetContent side="right">
-                          <SheetHeader>
-                            <SheetTitle>Pago {r.id}</SheetTitle>
-                          </SheetHeader>
-                          {edit && (
-                            <div className="p-4 space-y-3">
-                              <div>
-                                <label className="text-sm">Comprobante</label>
-                                <Input value={edit.comprobante} onChange={(e) => setEdit({ ...edit, comprobante: e.target.value })} />
-                              </div>
-                              <div>
-                                <label className="text-sm">Fecha</label>
-                                <Input type="date" value={edit.fecha} onChange={(e) => setEdit({ ...edit, fecha: e.target.value })} />
-                              </div>
-                              <div>
-                                <label className="text-sm">Monto</label>
-                                <Input type="number" min={0} step="0.01" value={edit.monto} onChange={(e) => setEdit({ ...edit, monto: Number(e.target.value) })} />
-                              </div>
-                              <div>
-                                <label className="text-sm">Banco</label>
-                                <Input value={edit.banco} onChange={(e) => setEdit({ ...edit, banco: e.target.value })} />
-                              </div>
-                              <div className="flex gap-2 pt-2">
-                                <Button onClick={guardar}>Guardar</Button>
-                                <Button variant="outline" onClick={() => setEdit(null)}>Cancelar</Button>
-                              </div>
-                            </div>
-                          )}
-                        </SheetContent>
-                      </Sheet>
+                      <EditPagoSheet pago={r} onSaved={refetch} />
                     </div>
                   </TableCell>
                 </TableRow>
@@ -117,5 +75,92 @@ export default function Page() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+const pagoSchema = z.object({
+  nroVoucher: z.string().min(1, "Requerido"),
+  fecha: z.string().min(1, "Requerido"),
+  monto: z.coerce.number().positive("Monto > 0"),
+  medioPago: z.string().min(1, "Requerido"),
+})
+
+function EditPagoSheet({ pago, onSaved }: Readonly<{ pago: import("@/services/pagos").PagoRead; onSaved: () => void }>) {
+  const updateMutation = useUpdatePago()
+  const closeRef = useRef<HTMLButtonElement | null>(null)
+  const form = useForm<import("@/services/pagos").PagoUpdate>({
+    resolver: zodResolver(pagoSchema) as any,
+    defaultValues: {
+      nroVoucher: pago.nroVoucher,
+      fecha: pago.fecha,
+      monto: pago.monto,
+      medioPago: pago.medioPago,
+      idInscripcion: pago.idInscripcion,
+      foto: pago.foto,
+      Estado: pago.Estado,
+    },
+  })
+
+  const onSubmit = form.handleSubmit(async (values) => {
+    try {
+      await updateMutation.mutateAsync({ id: pago.id, body: values })
+      toast.success("Pago actualizado")
+      onSaved()
+      closeRef.current?.click()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "No se pudo actualizar"
+      toast.error(msg)
+    }
+  })
+
+  return (
+    <Sheet>
+      <SheetTrigger asChild>
+        <Button size="sm" variant="outline">Editar</Button>
+      </SheetTrigger>
+      <SheetContent side="right">
+        <SheetHeader>
+          <SheetTitle>Pago {pago.id}</SheetTitle>
+        </SheetHeader>
+        <div className="p-4 space-y-3">
+          <form onSubmit={onSubmit} className="space-y-3">
+            <Field>
+              <FieldLabel htmlFor={`pagoVoucher-${pago.id}`}>Comprobante</FieldLabel>
+              <FieldContent>
+                <Input id={`pagoVoucher-${pago.id}`} {...form.register("nroVoucher")} />
+                <FieldError errors={[form.formState.errors.nroVoucher]} />
+              </FieldContent>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor={`pagoFecha-${pago.id}`}>Fecha</FieldLabel>
+              <FieldContent>
+                <Input id={`pagoFecha-${pago.id}`} type="date" {...form.register("fecha")} />
+                <FieldError errors={[form.formState.errors.fecha]} />
+              </FieldContent>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor={`pagoMonto-${pago.id}`}>Monto</FieldLabel>
+              <FieldContent>
+                <Input id={`pagoMonto-${pago.id}`} type="number" step="0.01" min={0} {...form.register("monto", { valueAsNumber: true })} />
+                <FieldError errors={[form.formState.errors.monto]} />
+              </FieldContent>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor={`pagoBanco-${pago.id}`}>Banco</FieldLabel>
+              <FieldContent>
+                <Input id={`pagoBanco-${pago.id}`} {...form.register("medioPago")} />
+                <FieldError errors={[form.formState.errors.medioPago]} />
+              </FieldContent>
+            </Field>
+            <div className="flex gap-2 pt-2">
+              <Button type="submit" disabled={updateMutation.isPending}>{updateMutation.isPending ? "Guardando…" : "Guardar"}</Button>
+              <SheetClose asChild>
+                <Button type="button" variant="outline" ref={closeRef}>Cancelar</Button>
+              </SheetClose>
+            </div>
+          </form>
+        </div>
+      </SheetContent>
+    </Sheet>
   )
 }

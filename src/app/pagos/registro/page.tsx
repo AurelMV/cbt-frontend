@@ -83,7 +83,7 @@ export default function Page() {
       const cicloIdStr = form.getValues("ciclo");
       const cicloId = Number(cicloIdStr);
       if (!cicloId || Number.isNaN(cicloId)) throw new Error("Ciclo inválido");
-      const data = await buscarInscripcion(dni, cicloId);
+  const data = await buscarInscripcion(dni, cicloId, { silentError: true });
       setPerfil(data);
       toast.success("Datos encontrados", {
         description: `${data.nombreAlumno} ${data.aPaterno} ${data.aMaterno}`,
@@ -104,7 +104,11 @@ export default function Page() {
       const file = values.archivo;
       const fotoBase64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
+        reader.onload = () => {
+          const result = reader.result;
+          if (typeof result === "string") return resolve(result);
+          reject(new Error("No se pudo leer el archivo"));
+        };
         reader.onerror = () => reject(new Error("No se pudo leer el archivo"));
         reader.readAsDataURL(file);
       });
@@ -117,7 +121,7 @@ export default function Page() {
         idInscripcion: perfil.idInscripcion,
         foto: fotoBase64,
         Estado: false, // pendiente hasta validación
-      });
+      }, { silentError: true });
 
       toast.success("Pago registrado", {
         description: `Comprobante ${values.comprobante}`,
