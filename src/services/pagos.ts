@@ -10,6 +10,35 @@ export interface PagoCreate {
   Estado?: boolean // false = pendiente, true = validado
 }
 
-export async function crearPago(payload: PagoCreate) {
-  return api.post(`/pagos/`, payload)
+export async function crearPago(payload: PagoCreate, opts?: { silentError?: boolean }) {
+  return api.post<PagoRead>(`/pagos/`, payload, { silentError: opts?.silentError })
+}
+
+export interface PagoRead {
+  id: number
+  nroVoucher: string
+  medioPago: string
+  monto: number
+  fecha: string
+  idInscripcion: number
+  foto?: string | null
+  Estado: boolean
+}
+
+export async function getPagos() {
+  return api.get<PagoRead[]>("/pagos/")
+}
+
+export interface PagoUpdate {
+  nroVoucher: string
+  medioPago: string
+  monto: number
+  fecha: string
+  idInscripcion: number
+  foto?: string | null
+  Estado: boolean
+}
+
+export async function actualizarPago(id: number, body: PagoUpdate) {
+  return api.put<PagoRead>(`/pagos/${id}`, body)
 }

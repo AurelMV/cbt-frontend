@@ -11,7 +11,8 @@ import {
   IconCheckupList,
   IconFileAnalytics,
   IconUserEdit,
-  IconHistory
+  IconHistory,
+  IconUsers
 } from "@tabler/icons-react"
 
 import { NavDocuments } from "@/components/nav-documents"
@@ -40,6 +41,9 @@ const data = {
     { title: "Pagos", url: "/admin/pagos", icon: IconCash },
     { title: "Programas", url: "/admin/programas", icon: IconBook },
     { title: "Ciclos", url: "/admin/ciclos", icon: IconCalendarMonth },
+    { title: "Clases", url: "/admin/clases", icon: IconClipboardList },
+    { title: "Grupos", url: "/admin/grupos", icon: IconUsers },
+    { title: "Alumnos", url: "/admin/alumnos", icon: IconUsers },
     { title: "Asistencias", url: "/admin/asistencias", icon: IconCheckupList },
     { title: "Reportes", url: "/admin/reportes", icon: IconFileAnalytics },
     { title: "Usuario", url: "/admin/usuario", icon: IconUserEdit },
@@ -64,7 +68,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               asChild
               className="data-[slot=sidebar-menu-button]:p-1.5!"
             >
-              <a href="#">
+              <a href="/admin">
                 <IconInnerShadowTop className="size-5!" />
                 <span className="text-base font-semibold">Acme Inc.</span>
               </a>
