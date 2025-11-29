@@ -1,12 +1,14 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import type { InscripcionCreate, InscripcionRead, InscripcionUpdate } from "@/services/inscripciones"
-import { actualizarInscripcion, crearInscripcion, getInscripciones } from "@/services/inscripciones"
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type DefaultError, type UseQueryResult } from "@tanstack/react-query"
+import type { InscripcionCreate, InscripcionUpdate, InscripcionesPage, InscripcionListParams } from "@/services/inscripciones"
+import { actualizarInscripcion, crearInscripcion, listInscripciones } from "@/services/inscripciones"
 
-export function useInscripciones() {
-  return useQuery<InscripcionRead[]>({
-    queryKey: ["inscripciones"],
-    queryFn: getInscripciones,
+export function useInscripciones(params: InscripcionListParams = {}): UseQueryResult<InscripcionesPage, DefaultError> {
+  const { page = 0, limit = 10, q = "", idPrograma, idCiclo, idClase } = params
+  return useQuery<InscripcionesPage>({
+    queryKey: ["inscripciones", { page, limit, q, idPrograma, idCiclo, idClase }],
+    queryFn: () => listInscripciones({ page, limit, q, idPrograma, idCiclo, idClase }),
     staleTime: 30_000,
+    placeholderData: keepPreviousData,
   })
 }
 

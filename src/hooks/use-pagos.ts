@@ -1,11 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import type { PagoRead, PagoUpdate } from "@/services/pagos"
-import { actualizarPago, getPagos } from "@/services/pagos"
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query"
+import type { PagoListParams, PagoUpdate, PagosPage } from "@/services/pagos"
+import { actualizarPago, listPagos } from "@/services/pagos"
 
-export function usePagos() {
-  return useQuery<PagoRead[]>({
-    queryKey: ["pagos"],
-    queryFn: getPagos,
+export function usePagos(params: PagoListParams = {}): UseQueryResult<PagosPage> {
+  const { page = 0, limit = 10, q = "", idCiclo, estado, tipoPago } = params
+  return useQuery<PagosPage>({
+    queryKey: ["pagos", { page, limit, q, idCiclo, estado, tipoPago }],
+    queryFn: () => listPagos({ page, limit, q, idCiclo, estado, tipoPago }),
     staleTime: 30_000,
   })
 }

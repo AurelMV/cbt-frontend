@@ -1,4 +1,15 @@
 import { api } from "./http"
+import type { PaginatedResponse } from "./pagination"
+
+export interface PagoListItem extends PagoRead {
+  tipoPago?: string | null
+  nombreAlumno: string
+  aPaterno?: string | null
+  aMaterno?: string | null
+  nombreCiclo: string
+}
+
+export type PagosPage = PaginatedResponse<PagoListItem>
 
 export interface PagoCreate {
   nroVoucher: string
@@ -25,8 +36,31 @@ export interface PagoRead {
   Estado: boolean
 }
 
+export interface PagoListParams {
+  page?: number
+  limit?: number
+  q?: string
+  idCiclo?: number
+  estado?: boolean
+  tipoPago?: string
+}
+
+export async function listPagos(params?: PagoListParams) {
+  const search = new URLSearchParams()
+  if (typeof params?.page === "number") search.set("page", String(params.page))
+  if (typeof params?.limit === "number") search.set("limit", String(params.limit))
+  if (params?.q) search.set("q", params.q)
+  if (typeof params?.idCiclo === "number") search.set("idCiclo", String(params.idCiclo))
+  if (typeof params?.estado === "boolean") search.set("estado", String(params.estado))
+  if (params?.tipoPago) search.set("tipoPago", params.tipoPago)
+  const url = `/pagos/${search.toString() ? `?${search.toString()}` : ""}`
+  return api.get<PaginatedResponse<PagoListItem>>(url)
+}
+
+// Compat: solo items
 export async function getPagos() {
-  return api.get<PagoRead[]>("/pagos/")
+  const page = await listPagos()
+  return page.items
 }
 
 export interface PagoUpdate {

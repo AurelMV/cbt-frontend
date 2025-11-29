@@ -1,4 +1,5 @@
 import { api } from "./http"
+import type { PaginatedResponse } from "./pagination"
 
 export interface AlumnoCreate {
   nombreAlumno: string
@@ -17,6 +18,11 @@ export interface AlumnoCreate {
 
 export interface AlumnoRead extends AlumnoCreate { id: number }
 
+export interface AlumnoListItem extends AlumnoRead {
+  edad: number
+  colegioNombre?: string | null
+}
+
 export interface AlumnoUpdate {
   nombreAlumno: string
   aMaterno: string
@@ -32,8 +38,31 @@ export interface AlumnoUpdate {
   idColegio: number
 }
 
+export type AlumnosPage = PaginatedResponse<AlumnoListItem>
+
+export interface AlumnoListParams {
+  page?: number
+  limit?: number
+  q?: string
+  sexo?: string
+  idColegio?: number
+}
+
+export async function listAlumnos(params?: AlumnoListParams) {
+  const search = new URLSearchParams()
+  if (typeof params?.page === "number") search.set("page", String(params.page))
+  if (typeof params?.limit === "number") search.set("limit", String(params.limit))
+  if (params?.q) search.set("q", params.q)
+  if (params?.sexo) search.set("sexo", params.sexo)
+  if (typeof params?.idColegio === "number") search.set("idColegio", String(params.idColegio))
+  const url = `/alumnos/${search.toString() ? `?${search.toString()}` : ""}`
+  return api.get<PaginatedResponse<AlumnoListItem>>(url)
+}
+
+// Compat: obtener solo items
 export async function getAlumnos() {
-  return api.get<AlumnoRead[]>("/alumnos/")
+  const page = await listAlumnos()
+  return page.items
 }
 
 export async function crearAlumno(body: AlumnoCreate) {

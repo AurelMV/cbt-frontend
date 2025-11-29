@@ -27,11 +27,13 @@ export type Grupo = GrupoRead
 
 // Compat: endpoint con barra final se usa en algunos lugares
 export async function getGrupos() {
-  return api.get<GrupoRead[]>("/grupos/")
+  const res = await api.get<GrupoRead[] | { items: GrupoRead[] }>("/grupos/")
+  return Array.isArray(res) ? res : res.items
 }
 
 export async function listarGrupos() {
-  return api.get<GrupoRead[]>("/grupos")
+  const res = await api.get<GrupoRead[] | { items: GrupoRead[] }>("/grupos")
+  return Array.isArray(res) ? res : res.items
 }
 
 export async function crearGrupo(body: GrupoCreate) {

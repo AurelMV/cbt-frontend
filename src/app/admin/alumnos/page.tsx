@@ -11,11 +11,36 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useForm, type Resolver } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useEffect, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import type { AlumnoListItem } from "@/services/alumnos"
+
+const formatAge = (birthDate?: string | null): string => {
+  if (!birthDate) return "—"
+  const parsed = new Date(birthDate)
+  if (Number.isNaN(parsed.getTime())) return "—"
+  const today = new Date()
+  let age = today.getFullYear() - parsed.getFullYear()
+  const monthDiff = today.getMonth() - parsed.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < parsed.getDate())) {
+    age -= 1
+  }
+  return age >= 0 ? String(age) : "—"
+}
 
 export default function Page() {
-  const { data, isLoading, isError, refetch } = useAlumnos()
-  
+  const [page, setPage] = useState(0)
+  const [q, setQ] = useState("")
+  const [sexo, setSexo] = useState<string>("t")
+  const [colegio, setColegio] = useState<string>("")
+  const limit = 15
+  const { data, isLoading, isError, refetch, isFetching } = useAlumnos({
+    page,
+    limit,
+    q,
+    sexo: sexo === "t" ? undefined : sexo,
+    idColegio: colegio ? Number(colegio) : undefined,
+  })
+  const items = useMemo<AlumnoListItem[]>(() => data?.items ?? [], [data])
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -24,8 +49,39 @@ export default function Page() {
           <CardTitle>Alumnos</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex justify-end">
-            <Button variant="outline" onClick={() => refetch()} disabled={isLoading}>Actualizar</Button>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="md:col-span-2">
+              <label className="text-sm" htmlFor="qAlumnos">Buscar (Nombre, DNI o Email)</label>
+              <Input id="qAlumnos" value={q} onChange={(e)=>{ setPage(0); setQ(e.target.value) }} placeholder="Ej. Perez 70123456" />
+            </div>
+            <div>
+              <label className="text-sm" htmlFor="sexoFilter">Sexo</label>
+              <Select value={sexo} onValueChange={(val) => { setPage(0); setSexo(val) }}>
+                <SelectTrigger id="sexoFilter">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="t">Todos</SelectItem>
+                  <SelectItem value="M">Masculino</SelectItem>
+                  <SelectItem value="F">Femenino</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm" htmlFor="colegioFilter">Colegio</label>
+              <Input
+                id="colegioFilter"
+                value={colegio}
+                onChange={(e) => {
+                  setPage(0)
+                  setColegio(e.target.value.replace(/[^0-9]/g, ""))
+                }}
+                placeholder="ID Colegio"
+              />
+            </div>
+            <div className="flex items-end justify-end">
+              <Button variant="outline" onClick={() => refetch()} disabled={isLoading || isFetching}>Actualizar</Button>
+            </div>
           </div>
 
           {/* Tabla */}
@@ -33,41 +89,69 @@ export default function Page() {
             <Table>
               <thead>
                 <tr>
-                  <th className="text-left p-2">ID</th>
-                  <th className="text-left p-2">Nombre</th>
+                  <th className="text-left p-2">Nombre completo</th>
                   <th className="text-left p-2">DNI</th>
+                  <th className="text-left p-2">Edad</th>
+                  <th className="text-left p-2">Sexo</th>
+                  <th className="text-left p-2">Tel. Apoderado</th>
+                  <th className="text-left p-2">Tel. Estudiante</th>
                   <th className="text-left p-2">Email</th>
                   <th className="text-left p-2">Colegio</th>
+                  <th className="text-left p-2">Dirección</th>
+                  <th className="text-left p-2">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading && ["sk1","sk2","sk3","sk4"].map(k => (
                   <tr key={k} className="border-t">
-                    <td className="p-2"><Skeleton className="h-4 w-12" /></td>
                     <td className="p-2"><Skeleton className="h-4 w-40" /></td>
                     <td className="p-2"><Skeleton className="h-4 w-28" /></td>
+                    <td className="p-2"><Skeleton className="h-4 w-10" /></td>
+                    <td className="p-2"><Skeleton className="h-4 w-10" /></td>
+                    <td className="p-2"><Skeleton className="h-4 w-24" /></td>
+                    <td className="p-2"><Skeleton className="h-4 w-24" /></td>
                     <td className="p-2"><Skeleton className="h-4 w-40" /></td>
                     <td className="p-2"><Skeleton className="h-4 w-16" /></td>
+                    <td className="p-2"><Skeleton className="h-4 w-28" /></td>
+                    <td className="p-2"><Skeleton className="h-4 w-20" /></td>
                   </tr>
                 ))}
                 {isError && !isLoading && (
                   <tr><td className="p-2 text-red-600" colSpan={5}>No se pudieron cargar los alumnos.</td></tr>
                 )}
-                {data?.map((a) => (
-                  <tr key={a.id} className="border-t">
-                    <td className="p-2">{a.id}</td>
-                    <td className="p-2">{a.nombreAlumno} {a.aPaterno} {a.aMaterno}</td>
-                    <td className="p-2">{a.nroDocumento}</td>
-                    <td className="p-2">{a.email}</td>
-                    <td className="p-2">{a.idColegio}</td>
-                    <td className="p-2"><EditAlumnoSheet alumno={a} onSaved={refetch} /></td>
-                  </tr>
-                ))}
-                {data?.length === 0 && !isLoading && (
+                {items.map((a) => {
+                  const nombreCompleto = [a.nombreAlumno, a.aPaterno, a.aMaterno].filter(Boolean).join(" ")
+                  const edadLabel = Number.isFinite(a.edad) ? String(a.edad) : formatAge(a.fechaNacimiento)
+                  return (
+                    <tr key={a.id} className="border-t">
+                      <td className="p-2 font-medium">{nombreCompleto}</td>
+                      <td className="p-2">{a.nroDocumento}</td>
+                      <td className="p-2">{edadLabel}</td>
+                      <td className="p-2 uppercase">{a.sexo}</td>
+                      <td className="p-2">{a.telefonoApoderado || "—"}</td>
+                      <td className="p-2">{a.telefonoEstudiante || "—"}</td>
+                      <td className="p-2">{a.email || "—"}</td>
+                      <td className="p-2">{a.colegioNombre || a.idColegio || "—"}</td>
+                      <td className="p-2">{a.Direccion || "—"}</td>
+                      <td className="p-2"><EditAlumnoSheet alumno={a} onSaved={refetch} /></td>
+                    </tr>
+                  )
+                })}
+                {items.length === 0 && !isLoading && (
                   <tr><td className="p-2" colSpan={6}>Sin alumnos</td></tr>
                 )}
               </tbody>
             </Table>
+          </div>
+
+          {/* Paginación */}
+          <div className="flex items-center justify-between pt-2">
+            <div className="text-sm text-muted-foreground">{data ? `Total: ${data.total} (pág. ${data.page+1} de ${data.pages})` : ""}</div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" disabled={page<=0} onClick={()=>setPage(p=>Math.max(0,p-1))}>Anterior</Button>
+              <div className="text-sm">{(page+1)} / {data?.pages ?? 1}</div>
+              <Button size="sm" variant="outline" disabled={(data?.pages ?? 1) <= (page+1)} onClick={()=>setPage(p=>p+1)}>Siguiente</Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -93,7 +177,7 @@ const alumnoSchema = z.object({
   idColegio: z.coerce.number().int().positive(),
 })
 
-function EditAlumnoSheet({ alumno, onSaved }: Readonly<{ alumno: import("@/services/alumnos").AlumnoRead; onSaved: () => void }>) {
+function EditAlumnoSheet({ alumno, onSaved }: Readonly<{ alumno: import("@/services/alumnos").AlumnoListItem; onSaved: () => void }>) {
   const updateMutation = useUpdateAlumno()
   const form = useForm<import("@/services/alumnos").AlumnoUpdate>({
     resolver: zodResolver(alumnoSchema) as Resolver<import("@/services/alumnos").AlumnoUpdate>,

@@ -83,7 +83,7 @@ export default function Page() {
       const cicloIdStr = form.getValues("ciclo");
       const cicloId = Number(cicloIdStr);
       if (!cicloId || Number.isNaN(cicloId)) throw new Error("Ciclo inválido");
-  const data = await buscarInscripcion(dni, cicloId, { silentError: true });
+      const data = await buscarInscripcion(dni, cicloId, { silentError: true });
       setPerfil(data);
       toast.success("Datos encontrados", {
         description: `${data.nombreAlumno} ${data.aPaterno} ${data.aMaterno}`,
@@ -113,15 +113,18 @@ export default function Page() {
         reader.readAsDataURL(file);
       });
 
-      await crearPago({
-        nroVoucher: values.comprobante,
-        medioPago: values.banco,
-        monto: values.monto,
-        fecha: values.fecha,
-        idInscripcion: perfil.idInscripcion,
-        foto: fotoBase64,
-        Estado: false, // pendiente hasta validación
-      }, { silentError: true });
+      await crearPago(
+        {
+          nroVoucher: values.comprobante,
+          medioPago: values.banco,
+          monto: values.monto,
+          fecha: values.fecha,
+          idInscripcion: perfil.idInscripcion,
+          foto: fotoBase64,
+          Estado: false, // pendiente hasta validación
+        },
+        { silentError: true }
+      );
 
       toast.success("Pago registrado", {
         description: `Comprobante ${values.comprobante}`,

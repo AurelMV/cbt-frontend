@@ -1,35 +1,72 @@
-import { useEffect, useState } from "react"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { Field, FieldContent, FieldDescription, FieldError, FieldLabel, FieldSet, FieldGroup } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Button } from "@/components/ui/button"
-import { useAutoSaveForm } from "@/hooks/use-autosave-form"
-import { Toaster } from "@/components/ui/sonner"
-import { toast } from "sonner"
-import FileUploader from "@/components/common/file-uploader"
-import { getProgramas, type ProgramaRead } from "@/services/programas"
-import { getCiclos } from "@/services/ciclos"
-import { getGruposPorCiclo } from "@/services/grupos"
-import { getDepartamentos, getProvinciasPorDepartamento, getDistritosPorProvincia, getColegiosPorDistrito } from "@/services/ubicacion"
-import type { Ciclo } from "@/services/ciclos"
-import type { Grupo } from "@/services/grupos"
-import type { Departamento, Distrito, Provincia, Colegio } from "@/services/ubicacion"
-import { createPreinscripcion } from "@/services/preinscripciones"
-import { createPrePago } from "@/services/prepagos"
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+  FieldSet,
+  FieldGroup,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { useAutoSaveForm } from "@/hooks/use-autosave-form";
+import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
+import FileUploader from "@/components/common/file-uploader";
+import { getProgramas, type ProgramaRead } from "@/services/programas";
+import { getCiclos } from "@/services/ciclos";
+import { getGruposPorCiclo } from "@/services/grupos";
+import {
+  getDepartamentos,
+  getProvinciasPorDepartamento,
+  getDistritosPorProvincia,
+  getColegiosPorDistrito,
+} from "@/services/ubicacion";
+import type { Ciclo } from "@/services/ciclos";
+import type { Grupo } from "@/services/grupos";
+import type {
+  Departamento,
+  Distrito,
+  Provincia,
+  Colegio,
+} from "@/services/ubicacion";
+import { createPreinscripcion } from "@/services/preinscripciones";
+import { createPrePago } from "@/services/prepagos";
+import { generateComprobanteInscripcionPdf } from "@/lib/inscripcion-pdf";
 
 const schema = z.object({
   // Datos personales
-  nroDocumento: z.string().min(8, "DNI debe tener 8 dígitos").max(12).regex(/^\d+$/g, "Sólo números"),
+  nroDocumento: z
+    .string()
+    .min(8, "DNI debe tener 8 dígitos")
+    .max(12)
+    .regex(/^\d+$/g, "Sólo números"),
   nombreAlumno: z.string().min(2).max(100),
   aPaterno: z.string().min(2).max(100),
   aMaterno: z.string().min(2).max(100),
-  fechaNacimiento: z.string().refine((v) => !Number.isNaN(new Date(v).getTime()), { message: "Fecha inválida" }),
+  fechaNacimiento: z
+    .string()
+    .refine((v) => !Number.isNaN(new Date(v).getTime()), {
+      message: "Fecha inválida",
+    }),
   sexo: z.enum(["M", "F"]).default("M"),
-  email: z.string().refine((v) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v), { message: "Email inválido" }),
+  email: z
+    .string()
+    .refine((v) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v), {
+      message: "Email inválido",
+    }),
   telefonoEstudiante: z.string().min(7).max(15),
   telefonoApoderado: z.string().min(7).max(15),
   Direccion: z.string().min(3).max(200),
@@ -48,90 +85,174 @@ const schema = z.object({
 
   // Pago
   nroVoucher: z.string().min(3),
-  medioPago: z.enum(["deposito", "transferencia", "yape", "plin"]).default("deposito"),
+  medioPago: z
+    .enum(["deposito", "transferencia", "yape", "plin"])
+    .default("deposito"),
   monto: z.coerce.number().positive(),
-  fechaPago: z.string().refine((v) => !Number.isNaN(new Date(v).getTime()), { message: "Fecha de pago inválida" }),
-  TipoPago: z.enum(["matricula", "mensualidad", "inscripcion"]).default("inscripcion"),
+  fechaPago: z
+    .string()
+    .refine((v) => !Number.isNaN(new Date(v).getTime()), {
+      message: "Fecha de pago inválida",
+    }),
+  TipoPago: z
+    .enum(["matricula", "mensualidad", "inscripcion"])
+    .default("inscripcion"),
   documento: z.instanceof(File).optional(),
-})
+});
 
-type FormValues = z.infer<typeof schema>
+type FormValues = z.infer<typeof schema>;
+
+const fileToDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+      } else {
+        reject(new Error("No se pudo leer el archivo"));
+      }
+    };
+    reader.onerror = () => reject(new Error("No se pudo leer el archivo"));
+    reader.readAsDataURL(file);
+  });
+
+const formatDisplayDate = (isoDate: string) => {
+  const parsed = new Date(isoDate);
+  if (Number.isNaN(parsed.getTime())) return isoDate;
+  return parsed.toLocaleDateString("es-PE");
+};
+
+const formatCurrency = (value: number) => `S/ ${value.toFixed(2)}`;
+
+const humanize = (text: string) =>
+  text
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
 
 export default function Page() {
-  const [submitting, setSubmitting] = useState(false)
-  const [programas, setProgramas] = useState<ProgramaRead[]>([])
-  const [ciclos, setCiclos] = useState<Ciclo[]>([])
-  const [grupos, setGrupos] = useState<Grupo[]>([])
-  const [departamentos, setDepartamentos] = useState<Departamento[]>([])
-  const [provincias, setProvincias] = useState<Provincia[]>([])
-  const [distritos, setDistritos] = useState<Distrito[]>([])
-  const [colegios, setColegios] = useState<Colegio[]>([])
+  const [submitting, setSubmitting] = useState(false);
+  const [programas, setProgramas] = useState<ProgramaRead[]>([]);
+  const [ciclos, setCiclos] = useState<Ciclo[]>([]);
+  const [grupos, setGrupos] = useState<Grupo[]>([]);
+  const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
+  const [provincias, setProvincias] = useState<Provincia[]>([]);
+  const [distritos, setDistritos] = useState<Distrito[]>([]);
+  const [colegios, setColegios] = useState<Colegio[]>([]);
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(schema) as unknown as import("react-hook-form").Resolver<FormValues>,
+    resolver: zodResolver(
+      schema
+    ) as unknown as import("react-hook-form").Resolver<FormValues>,
     defaultValues: {
       sexo: "M",
       medioPago: "deposito",
       TipoPago: "inscripcion",
     },
     mode: "onChange",
-  })
+  });
   const { clear } = useAutoSaveForm<FormValues>({
     form,
     storageKey: "inscripcion-form",
     // Requerimiento: al recargar, limpiar y no restaurar datos guardados
     restoreOnMount: false,
     clearOnMount: true,
-  })
+  });
 
   // Carga catálogos iniciales
   useEffect(() => {
     (async () => {
       try {
-        const [progs, cics, deps] = await Promise.all([getProgramas(), getCiclos(), getDepartamentos()])
-        setProgramas(progs)
-  // Mostrar solo ciclos activos (estado === true)
-  setCiclos(cics.filter((c: Ciclo) => c.estado === true))
-        setDepartamentos(deps)
+        const [progs, cics, deps] = await Promise.all([
+          getProgramas(),
+          getCiclos(),
+          getDepartamentos(),
+        ]);
+        setProgramas(progs);
+        // Mostrar solo ciclos activos (estado === true)
+        setCiclos(cics.filter((c: Ciclo) => c.estado === true));
+        setDepartamentos(deps);
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Error desconocido"
-        toast.error("No se pudieron cargar catálogos", { description: msg })
+        const msg = e instanceof Error ? e.message : "Error desconocido";
+        toast.error("No se pudieron cargar catálogos", { description: msg });
       }
-    })()
-  }, [])
+    })();
+  }, []);
 
   // Provincias por departamento
   useEffect(() => {
-    const depId = form.watch("departamento_id")
-    if (!depId) { setProvincias([]); setDistritos([]); setColegios([]); return }
-    getProvinciasPorDepartamento(depId).then(setProvincias).catch(() => setProvincias([]))
-  }, [form.watch("departamento_id")])
+    const depId = form.watch("departamento_id");
+    if (!depId) {
+      setProvincias([]);
+      setDistritos([]);
+      setColegios([]);
+      return;
+    }
+    getProvinciasPorDepartamento(depId)
+      .then(setProvincias)
+      .catch(() => setProvincias([]));
+  }, [form.watch("departamento_id")]);
 
   // Distritos por provincia
   useEffect(() => {
-    const provId = form.watch("provincia_id")
-    if (!provId) { setDistritos([]); setColegios([]); return }
-    getDistritosPorProvincia(provId).then(setDistritos).catch(() => setDistritos([]))
-  }, [form.watch("provincia_id")])
+    const provId = form.watch("provincia_id");
+    if (!provId) {
+      setDistritos([]);
+      setColegios([]);
+      return;
+    }
+    getDistritosPorProvincia(provId)
+      .then(setDistritos)
+      .catch(() => setDistritos([]));
+  }, [form.watch("provincia_id")]);
 
   // Colegios por distrito
   useEffect(() => {
-    const distId = form.watch("distrito_id")
-    if (!distId) { setColegios([]); return }
-    getColegiosPorDistrito(distId).then(setColegios).catch(() => setColegios([]))
-  }, [form.watch("distrito_id")])
+    const distId = form.watch("distrito_id");
+    if (!distId) {
+      setColegios([]);
+      return;
+    }
+    getColegiosPorDistrito(distId)
+      .then(setColegios)
+      .catch(() => setColegios([]));
+  }, [form.watch("distrito_id")]);
 
   // Grupos por ciclo
   useEffect(() => {
-    const cicloId = form.watch("idCiclo")
-    if (!cicloId) { setGrupos([]); return }
-    getGruposPorCiclo(cicloId).then(setGrupos).catch(() => setGrupos([]))
-  }, [form.watch("idCiclo")])
+    const cicloId = form.watch("idCiclo");
+    if (!cicloId) {
+      setGrupos([]);
+      return;
+    }
+    getGruposPorCiclo(cicloId)
+      .then(setGrupos)
+      .catch(() => setGrupos([]));
+  }, [form.watch("idCiclo")]);
 
   const onSubmit = async (values: FormValues) => {
-    setSubmitting(true)
+    setSubmitting(true);
+
+    const programaSel = programas.find((p) => p.id === values.idPrograma);
+    const cicloSel = ciclos.find((c) => c.id === values.idCiclo);
+    const grupoSel = values.grupoId ? grupos.find((g) => g.id === values.grupoId) : undefined;
+    const departamentoSel = departamentos.find((item) => item.id === values.departamento_id);
+    const provinciaSel = provincias.find((item) => item.id === values.provincia_id);
+    const distritoSel = distritos.find((item) => item.id === values.distrito_id);
+    const colegioSel = colegios.find((item) => item.id === values.idColegio);
+
+    let voucherImage: string | null = null;
+    if (values.documento instanceof File) {
+      try {
+        voucherImage = await fileToDataUrl(values.documento);
+      } catch (error) {
+        console.warn("No se pudo procesar la imagen adjunta", error);
+        toast("No se pudo procesar la imagen adjunta; se omitirá en el comprobante.");
+      }
+    }
+
     try {
-      // 1) Crear PreInscripción
       const pre = await createPreinscripcion({
         nombreAlumno: values.nombreAlumno,
         aMaterno: values.aMaterno,
@@ -148,41 +269,117 @@ export default function Page() {
         idCiclo: values.idCiclo,
         idPrograma: values.idPrograma,
         estado: "pendiente",
-      })
+      });
 
-      // 2) Crear PrePago vinculado
-      await createPrePago({
+      const prePago = await createPrePago({
         nroVoucher: values.nroVoucher,
         medioPago: values.medioPago,
         monto: values.monto,
         fecha: values.fechaPago,
         idInscripcion: pre.id,
-        foto: null, // pendiente: subir archivo y guardar URL
+        foto: voucherImage,
         TipoPago: values.TipoPago,
-      })
+      });
 
-      toast.success("Inscripción enviada", { description: `Referencia #${pre.id} - ${values.nombreAlumno}` })
-      clear(); form.reset()
+      const ahora = new Date();
+      const metadata: string[] = [
+        `Periodo: ${ahora.toLocaleDateString("es-PE", { month: "long", year: "numeric" })}`,
+        `Referencia: PRE-${pre.id}`,
+        `Generado: ${ahora.toLocaleString("es-PE")}`,
+      ];
+      if (cicloSel?.nombreCiclo) {
+        metadata.splice(1, 0, `Ciclo: ${cicloSel.nombreCiclo}`);
+      }
+
+      const estadoPre = (pre as { estado?: string }).estado ?? "pendiente";
+
+      generateComprobanteInscripcionPdf({
+        header: {
+          titulo: "REPORTE DE PREINSCRIPCIÓN",
+          subtitulo: programaSel ? `Programa: ${programaSel.nombrePrograma}` : undefined,
+          metadata,
+        },
+        sections: [
+          {
+            title: "Datos del estudiante",
+            rows: [
+              { label: "Alumno", value: `${values.nombreAlumno} ${values.aPaterno} ${values.aMaterno}`.trim() },
+              { label: "DNI", value: values.nroDocumento },
+              { label: "Sexo", value: values.sexo === "M" ? "Masculino" : "Femenino" },
+              { label: "Fecha de nacimiento", value: formatDisplayDate(values.fechaNacimiento) },
+              { label: "Email", value: values.email },
+              { label: "Teléfono estudiante", value: values.telefonoEstudiante },
+              { label: "Teléfono apoderado", value: values.telefonoApoderado },
+              { label: "Dirección", value: values.Direccion },
+              { label: "Departamento", value: departamentoSel?.nombreDepartamento ?? "N/A" },
+              { label: "Provincia", value: provinciaSel?.nombreProvincia ?? "N/A" },
+              { label: "Distrito", value: distritoSel?.nombreDistrito ?? "N/A" },
+              { label: "Colegio", value: colegioSel?.nombreColegio ?? `ID: ${values.idColegio}` },
+              { label: "Año culminado", value: String(values.anoCulminado) },
+              { label: "Estado de solicitud", value: humanize(estadoPre) },
+            ],
+          },
+          {
+            title: "Programa seleccionado",
+            rows: [
+              { label: "Programa", value: programaSel?.nombrePrograma ?? `ID: ${values.idPrograma}` },
+              { label: "Ciclo", value: cicloSel?.nombreCiclo ?? `ID: ${values.idCiclo}` },
+              { label: "Grupo", value: grupoSel?.nombreGrupo ?? "Por asignar" },
+              { label: "Tipo de pago", value: humanize(values.TipoPago) },
+            ],
+          },
+          {
+            title: "Datos del pago",
+            rows: [
+              { label: "Comprobante", value: values.nroVoucher },
+              { label: "Medio de pago", value: humanize(values.medioPago) },
+              { label: "Fecha de pago", value: formatDisplayDate(values.fechaPago) },
+              { label: "Monto", value: formatCurrency(values.monto) },
+              { label: "Estado del prepago", value: "Pendiente" },
+              { label: "Referencia prepago", value: String(prePago.id) },
+            ],
+          },
+        ],
+        voucherImage,
+        filename: `Comprobante-${pre.id}.pdf`,
+      });
+
+      toast.success("Inscripción enviada", {
+        description: `Referencia #${pre.id} - ${values.nombreAlumno}`,
+      });
+      clear();
+      form.reset();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Error desconocido"
-      toast.error("No se pudo enviar la inscripción", { description: msg })
+      const msg = e instanceof Error ? e.message : "Error desconocido";
+      toast.error("No se pudo enviar la inscripción", { description: msg });
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   return (
     <div className="max-w-3xl mx-auto p-4 md:p-6">
       <h1 className="text-2xl md:text-3xl font-semibold mb-2">Inscripción</h1>
-      <p className="text-muted-foreground mb-6">Complete los datos. Los campos marcados son obligatorios.</p>
+      <p className="text-muted-foreground mb-6">
+        Complete los datos. Los campos marcados son obligatorios.
+      </p>
 
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" noValidate>
+      <form
+        onSubmit={form.handleSubmit(onSubmit)}
+        className="space-y-6"
+        noValidate
+      >
         <FieldSet>
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="nroDocumento">DNI</FieldLabel>
               <FieldContent>
-                <Input id="nroDocumento" inputMode="numeric" aria-invalid={!!form.formState.errors.nroDocumento} {...form.register("nroDocumento")} />
+                <Input
+                  id="nroDocumento"
+                  inputMode="numeric"
+                  aria-invalid={!!form.formState.errors.nroDocumento}
+                  {...form.register("nroDocumento")}
+                />
                 <FieldError errors={[form.formState.errors.nroDocumento]} />
               </FieldContent>
             </Field>
@@ -190,7 +387,11 @@ export default function Page() {
             <Field>
               <FieldLabel htmlFor="nombreAlumno">Nombres</FieldLabel>
               <FieldContent>
-                <Input id="nombreAlumno" aria-invalid={!!form.formState.errors.nombreAlumno} {...form.register("nombreAlumno")} />
+                <Input
+                  id="nombreAlumno"
+                  aria-invalid={!!form.formState.errors.nombreAlumno}
+                  {...form.register("nombreAlumno")}
+                />
                 <FieldError errors={[form.formState.errors.nombreAlumno]} />
               </FieldContent>
             </Field>
@@ -198,19 +399,39 @@ export default function Page() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="aPaterno">Apellido paterno</Label>
-                <Input id="aPaterno" aria-invalid={!!form.formState.errors.aPaterno} {...form.register("aPaterno")} />
+                <Input
+                  id="aPaterno"
+                  aria-invalid={!!form.formState.errors.aPaterno}
+                  {...form.register("aPaterno")}
+                />
               </div>
               <div>
                 <Label htmlFor="aMaterno">Apellido materno</Label>
-                <Input id="aMaterno" aria-invalid={!!form.formState.errors.aMaterno} {...form.register("aMaterno")} />
+                <Input
+                  id="aMaterno"
+                  aria-invalid={!!form.formState.errors.aMaterno}
+                  {...form.register("aMaterno")}
+                />
               </div>
             </div>
-            <FieldError errors={[form.formState.errors.aPaterno, form.formState.errors.aMaterno]} />
+            <FieldError
+              errors={[
+                form.formState.errors.aPaterno,
+                form.formState.errors.aMaterno,
+              ]}
+            />
 
             <Field>
-              <FieldLabel htmlFor="fechaNacimiento">Fecha de nacimiento</FieldLabel>
+              <FieldLabel htmlFor="fechaNacimiento">
+                Fecha de nacimiento
+              </FieldLabel>
               <FieldContent>
-                <Input id="fechaNacimiento" type="date" aria-invalid={!!form.formState.errors.fechaNacimiento} {...form.register("fechaNacimiento")} />
+                <Input
+                  id="fechaNacimiento"
+                  type="date"
+                  aria-invalid={!!form.formState.errors.fechaNacimiento}
+                  {...form.register("fechaNacimiento")}
+                />
                 <FieldError errors={[form.formState.errors.fechaNacimiento]} />
               </FieldContent>
             </Field>
@@ -218,8 +439,17 @@ export default function Page() {
             <Field>
               <FieldLabel>Sexo</FieldLabel>
               <FieldContent>
-                <Select value={form.watch("sexo")} onValueChange={(v) => form.setValue("sexo", v as FormValues["sexo"], { shouldValidate: true })}>
-                  <SelectTrigger><SelectValue placeholder="Seleccione…" /></SelectTrigger>
+                <Select
+                  value={form.watch("sexo")}
+                  onValueChange={(v) =>
+                    form.setValue("sexo", v as FormValues["sexo"], {
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione…" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="M">Masculino</SelectItem>
                     <SelectItem value="F">Femenino</SelectItem>
@@ -231,7 +461,12 @@ export default function Page() {
             <Field>
               <FieldLabel htmlFor="email">Email</FieldLabel>
               <FieldContent>
-                <Input id="email" type="email" aria-invalid={!!form.formState.errors.email} {...form.register("email")} />
+                <Input
+                  id="email"
+                  type="email"
+                  aria-invalid={!!form.formState.errors.email}
+                  {...form.register("email")}
+                />
                 <FieldError errors={[form.formState.errors.email]} />
               </FieldContent>
             </Field>
@@ -239,18 +474,30 @@ export default function Page() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="telefonoEstudiante">Teléfono estudiante</Label>
-                <Input id="telefonoEstudiante" inputMode="tel" {...form.register("telefonoEstudiante")} />
+                <Input
+                  id="telefonoEstudiante"
+                  inputMode="tel"
+                  {...form.register("telefonoEstudiante")}
+                />
               </div>
               <div>
                 <Label htmlFor="telefonoApoderado">Teléfono apoderado</Label>
-                <Input id="telefonoApoderado" inputMode="tel" {...form.register("telefonoApoderado")} />
+                <Input
+                  id="telefonoApoderado"
+                  inputMode="tel"
+                  {...form.register("telefonoApoderado")}
+                />
               </div>
             </div>
 
             <Field>
               <FieldLabel htmlFor="Direccion">Dirección</FieldLabel>
               <FieldContent>
-                <Input id="Direccion" aria-invalid={!!form.formState.errors.Direccion} {...form.register("Direccion")} />
+                <Input
+                  id="Direccion"
+                  aria-invalid={!!form.formState.errors.Direccion}
+                  {...form.register("Direccion")}
+                />
                 <FieldError errors={[form.formState.errors.Direccion]} />
               </FieldContent>
             </Field>
@@ -258,7 +505,12 @@ export default function Page() {
             <Field>
               <FieldLabel htmlFor="anoCulminado">Año de culminación</FieldLabel>
               <FieldContent>
-                <Input id="anoCulminado" inputMode="numeric" aria-invalid={!!form.formState.errors.anoCulminado} {...form.register("anoCulminado")} />
+                <Input
+                  id="anoCulminado"
+                  inputMode="numeric"
+                  aria-invalid={!!form.formState.errors.anoCulminado}
+                  {...form.register("anoCulminado")}
+                />
                 <FieldError errors={[form.formState.errors.anoCulminado]} />
               </FieldContent>
             </Field>
@@ -267,28 +519,67 @@ export default function Page() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label>Departamento</Label>
-                <Select value={String(form.watch("departamento_id") ?? "")} onValueChange={(v) => form.setValue("departamento_id", Number(v), { shouldValidate: true })}>
-                  <SelectTrigger><SelectValue placeholder="Seleccione…" /></SelectTrigger>
+                <Select
+                  value={String(form.watch("departamento_id") ?? "")}
+                  onValueChange={(v) =>
+                    form.setValue("departamento_id", Number(v), {
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione…" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {departamentos.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.nombreDepartamento}</SelectItem>)}
+                    {departamentos.map((d) => (
+                      <SelectItem key={d.id} value={String(d.id)}>
+                        {d.nombreDepartamento}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label>Provincia</Label>
-                <Select value={String(form.watch("provincia_id") ?? "")} onValueChange={(v) => form.setValue("provincia_id", Number(v), { shouldValidate: true })}>
-                  <SelectTrigger><SelectValue placeholder="Seleccione…" /></SelectTrigger>
+                <Select
+                  value={String(form.watch("provincia_id") ?? "")}
+                  onValueChange={(v) =>
+                    form.setValue("provincia_id", Number(v), {
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione…" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {provincias.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.nombreProvincia}</SelectItem>)}
+                    {provincias.map((p) => (
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        {p.nombreProvincia}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label>Distrito</Label>
-                <Select value={String(form.watch("distrito_id") ?? "")} onValueChange={(v) => form.setValue("distrito_id", Number(v), { shouldValidate: true })}>
-                  <SelectTrigger><SelectValue placeholder="Seleccione…" /></SelectTrigger>
+                <Select
+                  value={String(form.watch("distrito_id") ?? "")}
+                  onValueChange={(v) =>
+                    form.setValue("distrito_id", Number(v), {
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione…" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {distritos.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.nombreDistrito}</SelectItem>)}
+                    {distritos.map((d) => (
+                      <SelectItem key={d.id} value={String(d.id)}>
+                        {d.nombreDistrito}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -297,10 +588,23 @@ export default function Page() {
             <Field>
               <FieldLabel>Colegio</FieldLabel>
               <FieldContent>
-                <Select value={String(form.watch("idColegio") ?? "")} onValueChange={(v) => form.setValue("idColegio", Number(v), { shouldValidate: true })}>
-                  <SelectTrigger><SelectValue placeholder="Seleccione…" /></SelectTrigger>
+                <Select
+                  value={String(form.watch("idColegio") ?? "")}
+                  onValueChange={(v) =>
+                    form.setValue("idColegio", Number(v), {
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione…" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {colegios.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.nombreColegio}</SelectItem>)}
+                    {colegios.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.nombreColegio}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </FieldContent>
@@ -310,32 +614,69 @@ export default function Page() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>Programa</Label>
-                <Select value={String(form.watch("idPrograma") ?? "")} onValueChange={(v) => form.setValue("idPrograma", Number(v), { shouldValidate: true })}>
-                  <SelectTrigger><SelectValue placeholder="Seleccione…" /></SelectTrigger>
+                <Select
+                  value={String(form.watch("idPrograma") ?? "")}
+                  onValueChange={(v) =>
+                    form.setValue("idPrograma", Number(v), {
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione…" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {programas.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.nombrePrograma}</SelectItem>)}
+                    {programas.map((p) => (
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        {p.nombrePrograma}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label>Ciclo</Label>
-                <Select value={String(form.watch("idCiclo") ?? "")} onValueChange={(v) => form.setValue("idCiclo", Number(v), { shouldValidate: true })}>
-                  <SelectTrigger><SelectValue placeholder="Seleccione…" /></SelectTrigger>
+                <Select
+                  value={String(form.watch("idCiclo") ?? "")}
+                  onValueChange={(v) =>
+                    form.setValue("idCiclo", Number(v), {
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione…" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {ciclos.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.nombreCiclo}</SelectItem>)}
+                    {ciclos.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.nombreCiclo}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            <FieldDescription>El grupo se determinará con la coordinación. (Opcional)</FieldDescription>
+            <FieldDescription>
+              El grupo se determinará con la coordinación. (Opcional)
+            </FieldDescription>
             <Field>
               <FieldLabel>Grupo (opcional)</FieldLabel>
               <FieldContent>
-                <Select value={String(form.watch("grupoId") ?? "")} onValueChange={(v) => form.setValue("grupoId", Number(v))}>
-                  <SelectTrigger><SelectValue placeholder="Seleccione…" /></SelectTrigger>
+                <Select
+                  value={String(form.watch("grupoId") ?? "")}
+                  onValueChange={(v) => form.setValue("grupoId", Number(v))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione…" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {grupos.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.nombreGrupo}</SelectItem>)}
+                    {grupos.map((g) => (
+                      <SelectItem key={g.id} value={String(g.id)}>
+                        {g.nombreGrupo}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </FieldContent>
@@ -349,18 +690,35 @@ export default function Page() {
               </div>
               <div>
                 <Label htmlFor="monto">Monto</Label>
-                <Input id="monto" inputMode="decimal" {...form.register("monto")} />
+                <Input
+                  id="monto"
+                  inputMode="decimal"
+                  {...form.register("monto")}
+                />
               </div>
               <div>
                 <Label htmlFor="fechaPago">Fecha de pago</Label>
-                <Input id="fechaPago" type="date" {...form.register("fechaPago")} />
+                <Input
+                  id="fechaPago"
+                  type="date"
+                  {...form.register("fechaPago")}
+                />
               </div>
             </div>
             <Field>
               <FieldLabel>Medio de pago</FieldLabel>
               <FieldContent>
-                <Select value={form.watch("medioPago")} onValueChange={(v) => form.setValue("medioPago", v as FormValues["medioPago"], { shouldValidate: true })}>
-                  <SelectTrigger><SelectValue placeholder="Seleccione…" /></SelectTrigger>
+                <Select
+                  value={form.watch("medioPago")}
+                  onValueChange={(v) =>
+                    form.setValue("medioPago", v as FormValues["medioPago"], {
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione…" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="deposito">Depósito</SelectItem>
                     <SelectItem value="transferencia">Transferencia</SelectItem>
@@ -373,8 +731,17 @@ export default function Page() {
             <Field>
               <FieldLabel>Tipo de pago</FieldLabel>
               <FieldContent>
-                <Select value={form.watch("TipoPago")} onValueChange={(v) => form.setValue("TipoPago", v as FormValues["TipoPago"], { shouldValidate: true })}>
-                  <SelectTrigger><SelectValue placeholder="Seleccione…" /></SelectTrigger>
+                <Select
+                  value={form.watch("TipoPago")}
+                  onValueChange={(v) =>
+                    form.setValue("TipoPago", v as FormValues["TipoPago"], {
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione…" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="inscripcion">Inscripción</SelectItem>
                     <SelectItem value="matricula">Matrícula</SelectItem>
@@ -388,15 +755,18 @@ export default function Page() {
               <FieldLabel>Evidencia de pago (PDF/JPG/PNG, ≤ 5MB)</FieldLabel>
               <FieldContent>
                 {(() => {
-                  const docVal = form.getValues("documento")
-                  const documentoFile = docVal instanceof File ? docVal : null
+                  const docVal = form.getValues("documento");
+                  const documentoFile = docVal instanceof File ? docVal : null;
                   return (
                     <FileUploader
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  maxSizeMB={5}
-                  value={documentoFile}
-                  onChange={(file) => form.setValue("documento", file ?? undefined)}
-                />)
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      maxSizeMB={5}
+                      value={documentoFile}
+                      onChange={(file) =>
+                        form.setValue("documento", file ?? undefined)
+                      }
+                    />
+                  );
                 })()}
               </FieldContent>
             </Field>
@@ -404,13 +774,18 @@ export default function Page() {
         </FieldSet>
 
         <div className="flex items-center gap-3">
-          <Button type="submit" disabled={submitting || !form.formState.isValid}>
+          <Button
+            type="submit"
+            disabled={submitting || !form.formState.isValid}
+          >
             {submitting ? "Enviando…" : "Enviar inscripción"}
           </Button>
-          <Button type="button" variant="outline" onClick={() => form.reset()}>Limpiar</Button>
+          <Button type="button" variant="outline" onClick={() => form.reset()}>
+            Limpiar
+          </Button>
         </div>
       </form>
       <Toaster />
     </div>
-  )
+  );
 }

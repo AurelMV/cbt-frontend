@@ -1,4 +1,5 @@
 import { api } from "./http"
+import type { PaginatedResponse } from "./pagination"
 
 export interface ClaseRead {
   id: number
@@ -18,11 +19,13 @@ export interface ClaseUpdate {
 
 // Compat: algunos lugares usan barra final en GET
 export async function getClases() {
-  return api.get<ClaseRead[]>("/clases/")
+  const page = await api.get<ClaseRead[] | PaginatedResponse<ClaseRead>>("/clases/")
+  return Array.isArray(page) ? page : page.items
 }
 
 export async function listarClases() {
-  return api.get<ClaseRead[]>("/clases")
+  const page = await api.get<ClaseRead[] | PaginatedResponse<ClaseRead>>("/clases")
+  return Array.isArray(page) ? page : page.items
 }
 
 export async function crearClase(body: ClaseCreate) {

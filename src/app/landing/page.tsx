@@ -1,8 +1,11 @@
+import { useEffect, useRef } from "react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { motion } from "framer-motion"
+import ProgramasGroupedSection from "@/components/sections/programas-grouped";
+import { animate, stagger } from "animejs"
 
 export default function Page() {
   return (
@@ -69,25 +72,7 @@ export default function Page() {
         />
         <div className="bg-[radial-gradient(ellipse_at_top_left,rgba(122,29,29,0.2),transparent_50%),radial-gradient(ellipse_at_bottom_right,rgba(122,29,29,0.15),transparent_50%)]">
           <div className="max-w-6xl mx-auto px-4 py-16 md:py-24 relative">
-            <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="text-center text-white space-y-4">
-              <h1 className="text-3xl md:text-5xl font-semibold tracking-tight">Prepárate con el CBT</h1>
-              <p className="text-sm md:text-base/relaxed opacity-95 max-w-3xl mx-auto">
-                Ingreso directo al IEST – Túpac Amaru vía CBT. Educación personalizada, material didáctico y plataformas virtuales.
-              </p>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-                <motion.div
-                  animate={{ scale: [1, 1.04, 1] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", repeatDelay: 0.5 }}
-                >
-                  <Button asChild size="lg" className="bg-amber-400 text-black hover:bg-amber-500">
-                    <Link to="/inscripcion">Inscribirse</Link>
-                  </Button>
-                </motion.div>
-                <Button asChild size="lg" variant="secondary">
-                  <Link to="/pagos/registro">Registrar pago</Link>
-                </Button>
-              </div>
-            </motion.div>
+            <HeroContent />
             {/* Indicador de scroll */}
             <motion.div
               className="absolute left-1/2 -translate-x-1/2 bottom-4 text-white/80 text-xs"
@@ -160,7 +145,10 @@ export default function Page() {
           </div>
         </section>
 
-        {/* Ciclos */}
+         {/* Programas por grupo */}
+         <ProgramasGroupedSection />
+
+         {/* Ciclos */}
         <section id="ciclos" className="bg-muted/30">
           <div className="max-w-6xl mx-auto px-4 py-12 md:py-16 space-y-6">
             <h2 className="text-2xl md:text-3xl font-semibold text-center">Ciclos disponibles</h2>
@@ -219,32 +207,7 @@ export default function Page() {
           </div>
         </section>
 
-        {/* Grupos */}
-        <section id="grupos" className="max-w-6xl mx-auto px-4 py-12 md:py-16 space-y-6">
-          <h2 className="text-2xl md:text-3xl font-semibold text-center">Grupos</h2>
-          <motion.div
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, margin: "-80px" }}
-            className="grid md:grid-cols-3 gap-6"
-            variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08 } } }}
-          >
-            {["Grupo A","Grupo B","Grupo C"].map((g, i) => (
-              <motion.div key={i} variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}>
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">{g}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid gap-3 text-sm text-muted-foreground">
-                    <div>• Programa 1</div>
-                    <div>• Programa 2</div>
-                    <div>• Programa 3</div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </motion.div>
-        </section>
+         {/* Grupos - reemplazado por Programas por grupo */}
       </main>
 
       {/* Footer simple */}
@@ -258,6 +221,42 @@ export default function Page() {
           </div>
         </div>
       </footer>
+    </div>
+  )
+}
+
+function HeroContent() {
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const titleRef = useRef<HTMLHeadingElement | null>(null)
+  const paragraphRef = useRef<HTMLParagraphElement | null>(null)
+  const buttonsRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    animate(titleRef.current as Element, { opacity: [0,1], translateY: [32,0], duration: 800, easing: 'easeOutQuad' })
+    animate(paragraphRef.current as Element, { opacity: [0,1], translateY: [24,0], duration: 600, easing: 'easeOutQuad', delay: 200 })
+    const btns = buttonsRef.current?.querySelectorAll('a, button') ?? []
+    if (btns && (btns as any).length !== 0) {
+      animate(btns as unknown as Element, { opacity: [0,1], scale: [0.92,1], duration: 500, delay: stagger(120, { start: 350 }) })
+    }
+
+    const btn = buttonsRef.current?.querySelector('a[href="/inscripcion"]') as HTMLElement | null
+    if (btn) {
+      animate(btn, { scale: [1,1.04,1], easing: 'easeInOutSine', duration: 1600, direction: 'alternate', loop: true, delay: 800 })
+    }
+  }, [])
+
+  return (
+    <div ref={rootRef} className="text-center text-white space-y-4">
+      <h1 ref={titleRef} className="text-3xl md:text-5xl font-semibold tracking-tight opacity-0">Prepárate con el CBT</h1>
+      <p ref={paragraphRef} className="text-sm md:text-base/relaxed opacity-0 max-w-3xl mx-auto">Ingreso directo al IEST – Túpac Amaru vía CBT. Educación personalizada, material didáctico y plataformas virtuales.</p>
+      <div ref={buttonsRef} className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 opacity-0">
+        <Button asChild size="lg" className="bg-amber-400 text-black hover:bg-amber-500">
+          <Link to="/inscripcion">Inscribirse</Link>
+        </Button>
+        <Button asChild size="lg" variant="secondary">
+          <Link to="/pagos/registro">Registrar pago</Link>
+        </Button>
+      </div>
     </div>
   )
 }

@@ -1,35 +1,62 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { animate, stagger } from "animejs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { toast } from "sonner"
 import { useInscripciones, useCreateInscripcion, useUpdateInscripcion } from "@/hooks/use-inscripciones"
 import { useAlumnos } from "@/hooks/use-alumnos"
 import { useCiclos } from "@/hooks/use-ciclos"
 import { useClases } from "@/hooks/use-clases"
 import { useProgramas } from "@/hooks/use-programas"
-import type { InscripcionRead } from "@/services/inscripciones"
+import type { InscripcionListItem } from "@/services/inscripciones"
 import { useForm, Controller } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Field, FieldContent, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
+type DecoratedInscripcion = InscripcionListItem & {
+  nombreMostrar: string
+  apellidos: string
+  cicloLabel: string
+  grupoLabel: string
+}
+
 export default function Page() {
   const EMAIL_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
-  const inscQ = useInscripciones()
+    const [q, setQ] = useState("") // búsqueda backend: Código, EstadoPago, TipoPago
+    const [dniLookup, setDniLookup] = useState("") // campo para búsqueda rápida por DNI + ciclo (endpoint /inscripciones/buscar)
+    const [lookupLoading, setLookupLoading] = useState(false)
+    const [page, setPage] = useState(0)
+    const [ciclo, setCiclo] = useState("")
+    const [programa, setPrograma] = useState("")
+    const [clase, setClase] = useState("")
+    const limit = 10
+    const inscQ = useInscripciones({
+      page,
+      limit,
+      q,
+      idCiclo: ciclo ? Number(ciclo) : undefined,
+      idPrograma: programa ? Number(programa) : undefined,
+      idClase: clase ? Number(clase) : undefined,
+    })
   const createInsc = useCreateInscripcion()
-  const alumnosQ = useAlumnos()
+    // Ajuste: backend limita 'limit' a <= 100 y 'page' es 0-based
+    // Usamos primera página (page=0) y límite máximo permitido (100)
+    const alumnosQ = useAlumnos({ page: 0, limit: 100 })
   const ciclosQ = useCiclos()
   const clasesQ = useClases()
   const programasQ = useProgramas()
 
-  const [ciclo, setCiclo] = useState("")
-  const [q, setQ] = useState("")
-  const [edit, setEdit] = useState<InscripcionRead | null>(null)
+  const pageSize = limit
+  const totalRegistros = inscQ.data?.total ?? 0
+  const totalPaginas = inscQ.data?.pages ?? 0
+  const gridRef = useRef<HTMLTableSectionElement>(null)
+  const [edit, setEdit] = useState<InscripcionListItem | null>(null)
   const [openCreate, setOpenCreate] = useState(false)
   const [wizard, setWizard] = useState<"alumno" | "insc" | "pago">("alumno")
 
@@ -128,12 +155,47 @@ export default function Page() {
     },
   })
 
-  const rows = inscQ.data ?? []
-  const filtrados = useMemo(() => {
-    return rows.filter(
-      (r) => (!ciclo || String(r.idCiclo) === ciclo) && (!q || String(r.id).includes(q) || r.Codigo.toLowerCase().includes(q.toLowerCase()))
-    )
-  }, [rows, ciclo, q])
+  const rows = useMemo<InscripcionListItem[]>(() => inscQ.data?.items ?? [], [inscQ.data])
+
+  const decoradas = useMemo<DecoratedInscripcion[]>(() => {
+    return rows.map((r) => ({
+      ...r,
+      nombreMostrar: r.nombreAlumno || `Alumno #${r.idAlumno}`,
+      apellidos: [r.aPaterno, r.aMaterno].filter(Boolean).join(" ") || "—",
+      cicloLabel: r.nombreCiclo || `Ciclo #${r.idCiclo}`,
+      grupoLabel: r.nombreGrupo || "—",
+    }))
+  }, [rows])
+
+  const pageItems = decoradas
+
+  // Reset de página al cambiar filtros
+  useEffect(() => { setPage(0) }, [ciclo, programa, clase, q])
+
+  useEffect(() => {
+    setClase("")
+  }, [ciclo])
+
+  // Animación de aparición de filas
+  useEffect(() => {
+    const el = gridRef.current
+    if (!el) return
+    const rowsEls = el.querySelectorAll('[data-insc-row]')
+    if (!rowsEls.length) return
+    // estado inicial
+    rowsEls.forEach(r => {
+      ;(r as HTMLElement).style.opacity = '0'
+      ;(r as HTMLElement).style.transform = 'translateY(12px)'
+    })
+    // animar
+    animate(rowsEls as unknown as Element, {
+      opacity: [0, 1],
+      translateY: [12, 0],
+      duration: 420,
+      delay: stagger(50),
+      easing: 'easeOutQuad'
+    })
+  }, [pageItems])
 
   const onSubmitCrear = createForm.handleSubmit(async (data) => {
     try {
@@ -238,8 +300,10 @@ export default function Page() {
                                         <SelectValue placeholder={alumnosQ.isLoading ? "Cargando…" : "Seleccione"} />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        {(alumnosQ.data ?? []).map(a => (
-                                          <SelectItem key={a.id} value={String(a.id)}>{a.nombreAlumno} {a.aPaterno}</SelectItem>
+                                        {(alumnosQ.data?.items ?? []).map((a) => (
+                                          <SelectItem key={a.id} value={String(a.id)}>
+                                            {a.nombreAlumno} {a.aPaterno}
+                                          </SelectItem>
                                         ))}
                                       </SelectContent>
                                     </Select>
@@ -544,11 +608,11 @@ export default function Page() {
         </CardHeader>
         <CardContent className="space-y-4">
 
-          {/* Selección de ciclo para listar */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* Filtros */}
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
             <div>
               <label className="text-sm" htmlFor="cicloList">Ciclo</label>
-              <Select value={ciclo} onValueChange={setCiclo}>
+              <Select value={ciclo} onValueChange={(v)=>setCiclo(v)}>
                 <SelectTrigger id="cicloList">
                   <SelectValue placeholder={ciclosQ.isLoading ? "Cargando…" : "Selecciona un ciclo"} />
                 </SelectTrigger>
@@ -557,42 +621,98 @@ export default function Page() {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          {/* Búsqueda simple */
-          }
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="md:col-span-2">
-              <label className="text-sm" htmlFor="buscarInsc">Buscar (ID o Código)</label>
-              <Input id="buscarInsc" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ej. 10 o ABC123" />
+            <div>
+              <label className="text-sm" htmlFor="progList">Programa</label>
+              <Select value={programa} onValueChange={(v)=>setPrograma(v === "all" ? "" : v)}>
+                <SelectTrigger id="progList">
+                  <SelectValue placeholder={programasQ.isLoading ? "Cargando…" : "Todos"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {(programasQ.data ?? []).map(p => (<SelectItem key={p.id} value={String(p.id)}>{p.nombrePrograma}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm" htmlFor="claseList">Clase</label>
+              <Select value={clase || "all"} onValueChange={(v)=>setClase(v === "all" ? "" : v)}>
+                <SelectTrigger id="claseList">
+                  <SelectValue placeholder={clasesQ.isLoading ? "Cargando…" : "Todas"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {(clasesQ.data ?? []).map(c => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.codigoClase}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm" htmlFor="buscarInsc">Buscar backend (Código / estado / tipo)</label>
+              <Input id="buscarInsc" value={q} onChange={(e) => { setPage(0); setQ(e.target.value) }} placeholder="Ej. COD-001 pendiente inscripcion" />
+            </div>
+            <div className="md:col-span-2 flex flex-col gap-1">
+              <label className="text-sm" htmlFor="dniLookup">Buscar inscripción por DNI + Ciclo</label>
+              <div className="flex gap-2">
+                <Input id="dniLookup" value={dniLookup} onChange={(e)=>setDniLookup(e.target.value)} placeholder="DNI alumno" className="flex-1" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!dniLookup || !ciclo || lookupLoading}
+                  onClick={async ()=>{
+                    if(!dniLookup || !ciclo) return
+                    setLookupLoading(true)
+                    try {
+                      const mod = await import("@/services/inscripciones")
+                      const res = await mod.buscarInscripcion(dniLookup, Number(ciclo), { silentError: true })
+                      toast.success(`Inscripción encontrada: Código ${res.Codigo ?? '—'} Alumno ${res.nombreAlumno} ${res.aPaterno}`)
+                      // Si tiene código lo usamos para filtrar remoto
+                      if(res.Codigo){
+                        setQ(res.Codigo)
+                        setPage(0)
+                      }
+                    } catch {
+                      toast.error("No se encontró inscripción para ese DNI y ciclo")
+                    } finally {
+                      setLookupLoading(false)
+                    }
+                  }}
+                >{lookupLoading ? 'Buscando…' : 'Buscar DNI'}</Button>
+              </div>
             </div>
           </div>
 
-          {/* Tabla visible solo cuando hay ciclo seleccionado; si no, mostrar indicación */}
+          {/* Lista (tabla) con paginación */}
           {ciclo ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Alumno</TableHead>
-                  <TableHead>Programa</TableHead>
-                  <TableHead>Ciclo</TableHead>
-                  <TableHead>Clase</TableHead>
-                  <TableHead>Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtrados.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell>{r.id}</TableCell>
-                    <TableCell>{r.Codigo}</TableCell>
-                    <TableCell>#{r.idAlumno}</TableCell>
-                    <TableCell>#{r.idPrograma}</TableCell>
-                    <TableCell>#{r.idCiclo}</TableCell>
-                    <TableCell>#{r.idClase}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Código</TableHead>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Apellidos</TableHead>
+                    <TableHead>Ciclo</TableHead>
+                    <TableHead>Grupo</TableHead>
+                    <TableHead>Clase</TableHead>
+                    <TableHead>Nro Pagos</TableHead>
+                    <TableHead>Estado Pago</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody ref={gridRef}>
+                  {pageItems.map(r => (
+                    <TableRow key={r.id} data-insc-row>
+                      <TableCell className="font-medium">{r.Codigo}</TableCell>
+                      <TableCell>{r.nombreMostrar}</TableCell>
+                      <TableCell>{r.apellidos}</TableCell>
+                      <TableCell>{r.cicloLabel}</TableCell>
+                      <TableCell>{r.grupoLabel}</TableCell>
+                      <TableCell>{r.codigoClase}</TableCell>
+                      <TableCell>{r.pagosCount}</TableCell>
+                      <TableCell className="capitalize">{r.EstadoPago}</TableCell>
+                      <TableCell>
                         <Sheet open={edit?.id === r.id} onOpenChange={(open) => setEdit(open ? r : null)}>
                           <SheetTrigger asChild>
                             <Button size="sm" variant="outline">Editar</Button>
@@ -604,12 +724,31 @@ export default function Page() {
                             {edit && <EditInscripcionForm value={edit} onCancel={() => setEdit(null)} onSaved={() => { setEdit(null); inscQ.refetch() }} />}
                           </SheetContent>
                         </Sheet>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+
+              {/* Paginación */}
+              <div className="flex items-center justify-between pt-4">
+                <div className="text-sm text-muted-foreground">
+                  {totalRegistros > 0
+                    ? `Mostrando ${page * pageSize + 1}-${Math.min((page + 1) * pageSize, totalRegistros)} de ${totalRegistros}`
+                    : "Sin registros"}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" disabled={page<=0} onClick={()=>setPage(p=>Math.max(0,p-1))}>Anterior</Button>
+                  <div className="text-sm">{totalPaginas === 0 ? 0 : page + 1} / {totalPaginas || 1}</div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page + 1 >= totalPaginas}
+                    onClick={()=>setPage(p=> Math.min(Math.max(0, totalPaginas - 1), p + 1))}
+                  >Siguiente</Button>
+                </div>
+              </div>
+            </>
           ) : (
             <div className="text-sm text-muted-foreground p-3 border rounded-md">
               Selecciona un ciclo para ver las inscripciones.
@@ -622,7 +761,7 @@ export default function Page() {
 }
 
 // Componente de edición con validación mínima (Código y Fecha)
-function EditInscripcionForm({ value, onCancel, onSaved }: { readonly value: InscripcionRead; readonly onCancel: () => void; readonly onSaved: () => void }) {
+function EditInscripcionForm({ value, onCancel, onSaved }: { readonly value: InscripcionListItem; readonly onCancel: () => void; readonly onSaved: () => void }) {
   const { mutateAsync } = useUpdateInscripcion()
   const schema = z.object({
     Codigo: z.string().min(1, "Código requerido"),

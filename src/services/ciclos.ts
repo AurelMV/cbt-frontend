@@ -1,4 +1,5 @@
 import { api } from "./http"
+import type { PaginatedResponse } from "./pagination"
 
 export interface CicloRead {
   id: number
@@ -26,12 +27,13 @@ export interface CicloUpdate {
 export type Ciclo = CicloRead
 
 export async function getCiclos() {
-  // Mantener compat con llamadas existentes
-  return api.get<CicloRead[]>("/ciclos/")
+  const page = await api.get<CicloRead[] | PaginatedResponse<CicloRead>>("/ciclos/")
+  return Array.isArray(page) ? page : page.items
 }
 
 export async function listarCiclos() {
-  return api.get<CicloRead[]>("/ciclos")
+  const page = await api.get<CicloRead[] | PaginatedResponse<CicloRead>>("/ciclos")
+  return Array.isArray(page) ? page : page.items
 }
 
 export async function crearCiclo(body: CicloCreate) {

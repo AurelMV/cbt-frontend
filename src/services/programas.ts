@@ -1,5 +1,15 @@
 import { api } from "./http"
 
+// Paginación mínima compatible con backend
+type Page<T> = {
+  items: T[]
+  total: number
+  pages: number
+  limit: number
+  offset: number
+  page: number
+}
+
 export type ProgramaRead = {
   id: number
   nombrePrograma: string
@@ -13,8 +23,9 @@ export type ProgramaUpdate = {
   nombrePrograma: string
 }
 
-export function listarProgramas() {
-  return api.get<ProgramaRead[]>("/programas")
+export async function listarProgramas() {
+  const page = await api.get<Page<ProgramaRead>>("/programas")
+  return page.items
 }
 
 export function crearPrograma(body: ProgramaCreate) {
