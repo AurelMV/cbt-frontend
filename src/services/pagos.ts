@@ -25,6 +25,21 @@ export async function crearPago(payload: PagoCreate, opts?: { silentError?: bool
   return api.post<PagoRead>(`/pagos/`, payload, { silentError: opts?.silentError })
 }
 
+export const downloadComprobantePago = async (id: number) => {
+  const BASE = import.meta.env.VITE_BASE_URL_API as string
+  const url = `${BASE}/pagos/${id}/comprobante`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error("Error descargando comprobante")
+  const blob = await res.blob()
+  const downloadUrl = window.URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = downloadUrl
+  a.download = `Comprobante-Pago-${id}.pdf`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
 export interface PagoRead {
   id: number
   nroVoucher: string
