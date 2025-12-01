@@ -72,6 +72,7 @@ export type BandejaPagoItem = {
     id: number
     idCiclo: number
     idAlumno: number
+    Codigo: string
   } | null
   alumno: {
     id: number

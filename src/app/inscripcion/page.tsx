@@ -1,18 +1,14 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Field,
-  FieldContent,
-  FieldDescription,
   FieldError,
   FieldLabel,
-  FieldSet,
-  FieldGroup,
+  FieldContent,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label"; // A veces usado internamente
 import {
   Select,
   SelectContent,
@@ -29,9 +25,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { useAutoSaveForm } from "@/hooks/use-autosave-form";
 import { Toaster } from "@/components/ui/sonner";
-import { toast } from "sonner";
 import {
   User,
   MapPin,
@@ -43,7 +37,7 @@ import {
 import FileUploader from "@/components/common/file-uploader";
 
 // ... TUS IMPORTACIONES DE SERVICIOS (Mantenlas igual) ...
-import { getProgramas, type ProgramaRead } from "@/services/programas";
+import { type ProgramaRead } from "@/services/programas";
 import { getCiclos, type Ciclo } from "@/services/ciclos";
 import { getGruposPorCiclo, type Grupo } from "@/services/grupos";
 import {
@@ -60,7 +54,6 @@ import {
   createPreinscripcion,
   downloadComprobante,
 } from "@/services/preinscripciones";
-import { createPrePago } from "@/services/prepagos";
 
 // ... TU SCHEMA ZOD (Mantenlo igual) ...
 const schema = z.object({
@@ -99,12 +92,6 @@ const schema = z.object({
 });
 
 type FormValues = z.infer<typeof schema>;
-
-// ... TU FUNCIÓN HELPER (Mantenla igual) ...
-const fileToDataUrl = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    /* ... */ resolve("");
-  });
 
 export default function Page() {
   // ... TUS ESTADOS Y HOOKS (Mantenlos igual) ...

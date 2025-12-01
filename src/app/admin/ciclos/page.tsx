@@ -11,11 +11,13 @@ import { Field, FieldContent, FieldError, FieldLabel } from "@/components/ui/fie
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
+import { FileDown } from "lucide-react"
+import { ExportDialog } from "@/components/admin/export-dialog"
 
 export default function Page() {
   const { data, isLoading, isError, refetch } = useCiclos()
-  
+  const [exportId, setExportId] = useState<number | null>(null)
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -63,8 +65,11 @@ export default function Page() {
                     <td className="p-2">{c.fechaInicio}</td>
                     <td className="p-2">{c.fechaFin}</td>
                     <td className="p-2">{c.estado ? "Activo" : "Inactivo"}</td>
-                    <td className="p-2">
+                    <td className="p-2 flex gap-2">
                       <EditCicloSheet ciclo={c} onSaved={refetch} />
+                      <Button variant="ghost" size="icon" onClick={() => setExportId(c.id)} title="Exportar Reporte">
+                        <FileDown className="h-4 w-4" />
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -76,6 +81,14 @@ export default function Page() {
           </div>
         </CardContent>
       </Card>
+      
+      <ExportDialog 
+        open={!!exportId} 
+        onOpenChange={(open) => !open && setExportId(null)}
+        entityType="ciclo"
+        entityId={exportId}
+        title="Exportar Reporte de Ciclo"
+      />
     </div>
   )
 }

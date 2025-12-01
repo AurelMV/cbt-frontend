@@ -1,4 +1,6 @@
-import { useMemo, useEffect, useRef } from "react"
+import { useMemo, useEffect, useRef, useState } from "react"
+import { FileDown } from "lucide-react"
+import { ExportDialog } from "@/components/admin/export-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -17,6 +19,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 export default function Page() {
   const { data, isLoading, isError, refetch } = useClases()
   const gruposQuery = useGrupos()
+  const [exportId, setExportId] = useState<number | null>(null)
 
   const gruposMap = useMemo(() => {
     return Object.fromEntries((gruposQuery.data ?? []).map(g => [g.id, g.nombreGrupo])) as Record<number, string>
@@ -63,8 +66,11 @@ export default function Page() {
                     <td className="p-2">{c.id}</td>
                     <td className="p-2">{c.codigoClase}</td>
                     <td className="p-2">{gruposMap[c.grupo_id] ?? c.grupo_id}</td>
-                    <td className="p-2">
+                    <td className="p-2 flex gap-2">
                       <EditClaseSheet clase={c} onSaved={refetch} />
+                      <Button variant="ghost" size="icon" onClick={() => setExportId(c.id)} title="Exportar Reporte">
+                        <FileDown className="h-4 w-4" />
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -76,6 +82,14 @@ export default function Page() {
           </div>
         </CardContent>
       </Card>
+
+      <ExportDialog 
+        open={!!exportId} 
+        onOpenChange={(open) => !open && setExportId(null)}
+        entityType="clase"
+        entityId={exportId}
+        title="Exportar Reporte de Clase"
+      />
     </div>
   )
 }

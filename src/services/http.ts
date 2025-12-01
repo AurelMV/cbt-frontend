@@ -14,6 +14,7 @@ type HttpOptions = {
   body?: unknown
   headers?: Record<string, string>
   silentError?: boolean // Si true, no muestra toast de error global
+  responseType?: 'json' | 'blob' | 'text'
 }
 
 export async function http<T>(path: string, opts?: HttpOptions) {
@@ -30,18 +31,33 @@ export async function http<T>(path: string, opts?: HttpOptions) {
     body: hasBody ? JSON.stringify(opts.body) : undefined,
   })
 
-  const text = await res.text()
-  const isJson = res.headers.get("content-type")?.includes("application/json")
-  const data = isJson && text ? JSON.parse(text) : text
-
   if (!res.ok) {
-  const detail = typeof data === "object" && data && "detail" in data ? (data as Record<string, unknown>).detail : res.statusText
-    const message = typeof detail === "string" && detail.trim() ? detail : "Error en la solicitud"
+    let message = res.statusText
+    try {
+      const text = await res.text()
+      const isJson = res.headers.get("content-type")?.includes("application/json")
+      const data = isJson && text ? JSON.parse(text) : text
+      const detail = typeof data === "object" && data && "detail" in data ? (data as Record<string, unknown>).detail : null
+      if (typeof detail === "string" && detail.trim()) {
+        message = detail
+      }
+    } catch (e) {
+      // ignore error parsing
+    }
+
     if (!opts?.silentError) {
       toast.error(message)
     }
     throw new Error(message)
   }
+
+  if (opts?.responseType === 'blob') {
+    return (await res.blob()) as unknown as T
+  }
+
+  const text = await res.text()
+  const isJson = res.headers.get("content-type")?.includes("application/json")
+  const data = isJson && text ? JSON.parse(text) : text
 
   return data as T
 }
