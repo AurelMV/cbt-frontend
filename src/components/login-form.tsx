@@ -27,37 +27,39 @@ export function LoginForm({
   const navigate = useNavigate()
   const login = useAuth((s) => s.login)
 
-  const onSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
+  const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
     e.preventDefault()
     const form = new FormData(e.currentTarget)
-    const email = String(form.get("email") || "")
-    const password = String(form.get("password") || "")
+    const email = (form.get("email") as string) ?? ""
+    const password = (form.get("password") as string) ?? ""
     setLoading(true)
-    try {
-      const user = await login(email, password)
-      toast.success("Bienvenido", { description: `${user.name} (${user.role})` })
-      if (user.role === "admin") navigate("/admin")
-      else navigate("/asistencias")
-    } catch (err) {
-      toast.error("Credenciales inválidas")
-    } finally {
-      setLoading(false)
-    }
+    void (async () => {
+      try {
+        const user = await login(email, password)
+        toast.success("Bienvenido", { description: `${user.name} (${user.role})` })
+        if (user.role === "admin") navigate("/admin")
+        else navigate("/asistencias")
+      } catch {
+        toast.error("Credenciales inválidas")
+      } finally {
+        setLoading(false)
+      }
+    })()
   }
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader>
-          <CardTitle>Login to your account</CardTitle>
+          <CardTitle>Iniciar sesión</CardTitle>
           <CardDescription>
-            Enter your email below to login to your account
+            Ingrese su correo electrónico para acceder a su cuenta
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit}>
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <FieldLabel htmlFor="email">Correo electrónico</FieldLabel>
                 <Input
                   id="email"
                   type="email"
@@ -68,23 +70,20 @@ export function LoginForm({
               </Field>
               <Field>
                 <div className="flex items-center">
-                  <FieldLabel htmlFor="password">Password</FieldLabel>
-                  <a
-                    href="#"
-                    className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
+                  <FieldLabel htmlFor="password">Contraseña</FieldLabel>
+                  <button
+                    type="button"
+                    className="ml-auto inline-block text-sm underline-offset-4 hover:underline text-left"
                   >
-                    Forgot your password?
-                  </a>
+                    ¿Olvidaste tu contraseña?
+                  </button>
                 </div>
                 <Input id="password" type="password" required name="password" />
               </Field>
               <Field>
-                <Button type="submit" disabled={loading}>{loading ? "Ingresando…" : "Login"}</Button>
-                <Button variant="outline" type="button" disabled={loading}>
-                  Login with Google
-                </Button>
+                <Button type="submit" disabled={loading} className="w-full">{loading ? "Ingresando…" : "Ingresar"}</Button>
                 <FieldDescription className="text-center">
-                  Don&apos;t have an account? <a href="#">Sign up</a>
+                  ¿No tienes una cuenta? <button type="button" className="underline underline-offset-4">Regístrate</button>
                 </FieldDescription>
               </Field>
             </FieldGroup>

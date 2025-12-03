@@ -22,3 +22,19 @@ export interface PreInscripcion extends PreInscripcionCreate { id: number; estad
 
 export const getPreinscripciones = () => api.get<PreInscripcion[]>("/preinscripciones/")
 export const createPreinscripcion = (data: PreInscripcionCreate) => api.post<PreInscripcion>("/preinscripciones/", data)
+
+export const downloadComprobante = async (id: number) => {
+  const BASE = import.meta.env.VITE_BASE_URL_API as string
+  const url = `${BASE}/preinscripciones/${id}/comprobante`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error("Error descargando comprobante")
+  const blob = await res.blob()
+  const downloadUrl = window.URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = downloadUrl
+  a.download = `Comprobante-PRE-${id}.pdf`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+

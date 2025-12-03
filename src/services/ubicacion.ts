@@ -6,19 +6,12 @@ export interface Distrito { id: number; nombreDistrito: string; provincia_id: nu
 export interface Colegio { id: number; nombreColegio: string; distrito_id: number }
 
 export const getDepartamentos = () => api.get<Departamento[]>("/departamentos/")
-export const getProvincias = () => api.get<Provincia[]>("/provincias/")
-export const getDistritos = () => api.get<Distrito[]>("/distritos/")
-export const getColegios = () => api.get<Colegio[]>("/colegios/")
 
-export async function getProvinciasPorDepartamento(departamentoId: number) {
-  const all = await getProvincias()
-  return all.filter(p => p.departamento_id === departamentoId)
-}
-export async function getDistritosPorProvincia(provinciaId: number) {
-  const all = await getDistritos()
-  return all.filter(d => d.provincia_id === provinciaId)
-}
-export async function getColegiosPorDistrito(distritoId: number) {
-  const all = await getColegios()
-  return all.filter(c => c.distrito_id === distritoId)
-}
+export const getProvinciasPorDepartamento = (departamentoId: number) => 
+  api.get<Provincia[]>(`/provincias/?departamento_id=${departamentoId}`)
+
+export const getDistritosPorProvincia = (provinciaId: number) => 
+  api.get<Distrito[]>(`/distritos/?provincia_id=${provinciaId}`)
+
+export const getColegiosPorDistrito = (distritoId: number) => 
+  api.get<Colegio[]>(`/colegios/?distrito_id=${distritoId}`)
