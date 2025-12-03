@@ -1,4 +1,4 @@
-import { api } from "./http"
+import { api, BASE } from "./http"
 
 export interface PreInscripcionCreate {
   nombreAlumno: string
@@ -24,7 +24,6 @@ export const getPreinscripciones = () => api.get<PreInscripcion[]>("/preinscripc
 export const createPreinscripcion = (data: PreInscripcionCreate) => api.post<PreInscripcion>("/preinscripciones/", data)
 
 export const downloadComprobante = async (id: number) => {
-  const BASE = import.meta.env.VITE_BASE_URL_API as string
   const url = `${BASE}/preinscripciones/${id}/comprobante`
   const res = await fetch(url)
   if (!res.ok) throw new Error("Error descargando comprobante")
