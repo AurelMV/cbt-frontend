@@ -1,4 +1,4 @@
-import { api } from "./http"
+import { api, BASE } from "./http"
 import type { PaginatedResponse } from "./pagination"
 
 export interface PagoListItem extends PagoRead {
@@ -26,7 +26,6 @@ export async function crearPago(payload: PagoCreate, opts?: { silentError?: bool
 }
 
 export const downloadComprobantePago = async (id: number) => {
-  const BASE = import.meta.env.VITE_BASE_URL_API as string
   const url = `${BASE}/pagos/${id}/comprobante`
   const res = await fetch(url)
   if (!res.ok) throw new Error("Error descargando comprobante")
