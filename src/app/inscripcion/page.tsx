@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -36,24 +36,27 @@ import {
 } from "lucide-react"; // Iconos para darle vida
 import FileUploader from "@/components/common/file-uploader";
 
-// ... TUS IMPORTACIONES DE SERVICIOS (Mantenlas igual) ...
-import { type ProgramaRead } from "@/services/programas";
-import { getCiclos, type Ciclo } from "@/services/ciclos";
-import { getGruposPorCiclo, type Grupo } from "@/services/grupos";
 import {
   getDepartamentos,
   getProvinciasPorDepartamento,
   getDistritosPorProvincia,
   getColegiosPorDistrito,
   type Departamento,
-  type Distrito,
   type Provincia,
+  type Distrito,
   type Colegio,
 } from "@/services/ubicacion";
 import {
-  createPreinscripcion,
-  downloadComprobante,
-} from "@/services/preinscripciones";
+  getProgramas,
+  type Programa,
+} from "@/services/programas";
+import {
+  getCiclosPorPrograma,
+  type Ciclo,
+} from "@/services/ciclos";
+import { createPreinscripcion } from "@/services/preinscripciones";
+import { createPrePago } from "@/services/prepagos";
+import { toast } from "sonner";
 
 // ... TU SCHEMA ZOD (Mantenlo igual) ...
 const schema = z.object({
@@ -94,12 +97,16 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function Page() {
-  // ... TUS ESTADOS Y HOOKS (Mantenlos igual) ...
-  const [submitting, setSubmitting] = useState(false);
-  const [programas, setProgramas] = useState<ProgramaRead[]>([]);
-  // ... resto de estados ...
+  const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
+  const [provincias, setProvincias] = useState<Provincia[]>([]);
+  const [distritos, setDistritos] = useState<Distrito[]>([]);
+  const [colegios, setColegios] = useState<Colegio[]>([]);
+
+  const [programas, setProgramas] = useState<Programa[]>([]);
+  const [ciclos, setCiclos] = useState<Ciclo[]>([]);
 
   const form = useForm<FormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(schema) as any,
     defaultValues: {
       sexo: "M",
@@ -109,16 +116,123 @@ export default function Page() {
     mode: "onChange",
   });
 
-  // ... TUS USE EFFECT (Mantenlos igual, son vitales) ...
-  // (Omití el código repetitivo de los useEffect para centrarme en el diseño,
-  //  pero asume que aquí va todo tu código de carga de datos)
+  // Cargar Departamentos y Programas al inicio
+  useEffect(() => {
+    getDepartamentos().then(setDepartamentos);
+    getProgramas().then(setProgramas);
+  }, []);
 
-  // Dummy logic para que el ejemplo compile sin los servicios reales
-  // En tu código real, NO BORRES tus useEffects.
+  // Cascading Selects: Departamento -> Provincia
+  const selectedDepartamento = form.watch("departamento_id");
+  useEffect(() => {
+    if (selectedDepartamento) {
+      getProvinciasPorDepartamento(selectedDepartamento).then(setProvincias);
+      setDistritos([]); // Limpiar hijos
+      setColegios([]);
+    } else {
+      setProvincias([]);
+      setDistritos([]);
+      setColegios([]);
+    }
+  }, [selectedDepartamento]);
+
+  // Cascading Selects: Provincia -> Distrito
+  const selectedProvincia = form.watch("provincia_id");
+  useEffect(() => {
+    if (selectedProvincia) {
+      getDistritosPorProvincia(selectedProvincia).then(setDistritos);
+      setColegios([]);
+    } else {
+      setDistritos([]);
+      setColegios([]);
+    }
+  }, [selectedProvincia]);
+
+  // Cascading Selects: Distrito -> Colegio
+  const selectedDistrito = form.watch("distrito_id");
+  useEffect(() => {
+    if (selectedDistrito) {
+      getColegiosPorDistrito(selectedDistrito).then(setColegios);
+    } else {
+      setColegios([]);
+    }
+  }, [selectedDistrito]);
+
+  // Cascading Selects: Programa -> Ciclo
+  const selectedPrograma = form.watch("idPrograma");
+  useEffect(() => {
+    if (selectedPrograma) {
+      getCiclosPorPrograma(selectedPrograma).then(setCiclos);
+    } else {
+      setCiclos([]);
+    }
+  }, [selectedPrograma]);
 
   const onSubmit = async (values: FormValues) => {
-    // ... TU LOGICA DE SUBMIT IGUAL ...
-    console.log(values);
+    try {
+      // 1. Crear Preinscripción
+      const preinscripcionData = {
+        nombreAlumno: values.nombreAlumno,
+        aPaterno: values.aPaterno,
+        aMaterno: values.aMaterno,
+        sexo: values.sexo,
+        telefonoEstudiante: values.telefonoEstudiante,
+        telefonoApoderado: values.telefonoApoderado,
+        fechaNacimiento: values.fechaNacimiento,
+        email: values.email,
+        anoCulminado: values.anoCulminado,
+        Direccion: values.Direccion,
+        nroDocumento: values.nroDocumento,
+        idColegio: values.idColegio,
+        idPrograma: values.idPrograma,
+        idCiclo: values.idCiclo,
+      };
+
+      const preinscripcion = await createPreinscripcion(preinscripcionData);
+
+      if (!preinscripcion || !preinscripcion.id) {
+        throw new Error("No se pudo crear la preinscripción");
+      }
+
+      // 2. Procesar archivo (foto) a Base64
+      let fotoBase64: string | null = null;
+      if (values.documento) {
+        fotoBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(values.documento as File);
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = (error) => reject(error);
+        });
+      }
+
+      // 3. Crear Prepago
+      const prepagoData = {
+        nroVoucher: values.nroVoucher,
+        medioPago: values.medioPago,
+        monto: values.monto,
+        fecha: values.fechaPago,
+        idInscripcion: preinscripcion.id,
+        foto: fotoBase64,
+        TipoPago: values.TipoPago,
+      };
+
+      await createPrePago(prepagoData);
+
+      toast.success("Inscripción registrada correctamente", {
+        description: "Sus datos han sido enviados para revisión.",
+      });
+
+      form.reset();
+      setProvincias([]);
+      setDistritos([]);
+      setColegios([]);
+      setCiclos([]);
+    } catch (error) {
+      console.error(error);
+      toast.error("Error al registrar inscripción", {
+        description: "Por favor verifique los datos e intente nuevamente.",
+      });
+    }
   };
 
   return (
@@ -144,10 +258,10 @@ export default function Page() {
             </Button>
             <Button
               onClick={form.handleSubmit(onSubmit)}
-              disabled={submitting || !form.formState.isValid}
+              disabled={form.formState.isSubmitting || !form.formState.isValid}
               className="gap-2"
             >
-              {submitting ? (
+              {form.formState.isSubmitting ? (
                 "Procesando..."
               ) : (
                 <>
@@ -219,7 +333,7 @@ export default function Page() {
                     <FieldLabel>Sexo</FieldLabel>
                     <Select
                       value={form.watch("sexo")}
-                      onValueChange={(v) => form.setValue("sexo", v as any)}
+                      onValueChange={(v) => form.setValue("sexo", v as "M" | "F")}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Seleccione" />
@@ -312,8 +426,11 @@ export default function Page() {
                       <SelectValue placeholder="Seleccione..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {/* Aquí van tus departamentos.map... */}
-                      <SelectItem value="1">Ejemplo Dept</SelectItem>
+                      {departamentos.map((d) => (
+                        <SelectItem key={d.id} value={String(d.id)}>
+                          {d.nombreDepartamento}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </Field>
@@ -329,7 +446,13 @@ export default function Page() {
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccione..." />
                     </SelectTrigger>
-                    <SelectContent>{/* TUS PROVINCIAS */}</SelectContent>
+                    <SelectContent>
+                      {provincias.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>
+                          {p.nombreProvincia}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                 </Field>
 
@@ -344,7 +467,13 @@ export default function Page() {
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccione..." />
                     </SelectTrigger>
-                    <SelectContent>{/* TUS DISTRITOS */}</SelectContent>
+                    <SelectContent>
+                      {distritos.map((d) => (
+                        <SelectItem key={d.id} value={String(d.id)}>
+                          {d.nombreDistrito}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                 </Field>
 
@@ -360,7 +489,13 @@ export default function Page() {
                       <SelectTrigger>
                         <SelectValue placeholder="Seleccione colegio..." />
                       </SelectTrigger>
-                      <SelectContent>{/* TUS COLEGIOS */}</SelectContent>
+                      <SelectContent>
+                        {colegios.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>
+                            {c.nombreColegio}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
                     </Select>
                   </Field>
                 </div>
@@ -402,7 +537,13 @@ export default function Page() {
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccione programa..." />
                     </SelectTrigger>
-                    <SelectContent>{/* TUS PROGRAMAS */}</SelectContent>
+                    <SelectContent>
+                      {programas.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>
+                          {p.nombrePrograma}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                 </Field>
 
@@ -415,7 +556,13 @@ export default function Page() {
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccione ciclo..." />
                     </SelectTrigger>
-                    <SelectContent>{/* TUS CICLOS */}</SelectContent>
+                    <SelectContent>
+                      {ciclos.map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>
+                          {c.nombreCiclo}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                 </Field>
 
@@ -468,7 +615,7 @@ export default function Page() {
                     <Select
                       value={form.watch("medioPago")}
                       onValueChange={(v) =>
-                        form.setValue("medioPago", v as any)
+                        form.setValue("medioPago", v as "deposito" | "transferencia" | "yape" | "plin")
                       }
                     >
                       <SelectTrigger>
@@ -493,7 +640,7 @@ export default function Page() {
                     <FieldLabel>Tipo de Pago</FieldLabel>
                     <Select
                       value={form.watch("TipoPago")}
-                      onValueChange={(v) => form.setValue("TipoPago", v as any)}
+                      onValueChange={(v) => form.setValue("TipoPago", v as "matricula" | "mensualidad" | "inscripcion")}
                     >
                       <SelectTrigger>
                         <SelectValue />

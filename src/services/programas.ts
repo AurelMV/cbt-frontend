@@ -23,6 +23,8 @@ export type ProgramaUpdate = {
   nombrePrograma: string
 }
 
+export type Programa = ProgramaRead
+
 export async function listarProgramas() {
   const page = await api.get<Page<ProgramaRead>>("/programas")
   return page.items

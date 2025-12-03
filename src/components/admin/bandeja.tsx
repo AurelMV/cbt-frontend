@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -42,8 +41,6 @@ import {
   GraduationCap,
   AlertCircle,
   Search,
-  Maximize2,
-  X,
   ExternalLink,
 } from "lucide-react";
 import {
@@ -768,7 +765,7 @@ export function BandejaButton({
                                           </div>
                                           <div>
                                             <span className="text-muted-foreground text-xs">Código</span>
-                                            <div className="font-medium">{item.alumno.codigoAlumno}</div>
+                                            {/* <div className="font-medium">{item.alumno.codigoAlumno}</div> */}
                                           </div>
                                         </CardContent>
                                       </Card>

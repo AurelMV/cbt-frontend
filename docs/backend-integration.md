@@ -125,16 +125,25 @@ Notas de uso:
 ## Alumnos
 
 - Base: `/api/alumnos`
-- `GET /api/alumnos/` → página (Page[AlumnoRead])
+- `GET /api/alumnos/` → página (Page[AlumnoDetalleRead])
   - Query: `offset`, `limit`, `page`, `q` (nombre/apellidos/DNI/email)
   - Respuesta: `items`, `total`, `pages`, `limit`, `offset`, `page`
 - `POST /api/alumnos/` → AlumnoCreate (requiere `idColegio` válido)
+
+> **Actualización:** el listado `GET /api/alumnos/` ahora expone un modelo enriquecido (`AlumnoDetalleRead`) pensado para consumo directo en el frontend. Cada elemento incluye, además de los campos base, los siguientes datos calculados o relacionados:
+>
+> - `edad`: se calcula con la fecha de nacimiento y la fecha actual.
+> - `telefono_estudiante`, `telefono_apoderado`, `email`, `nro_documento`.
+> - `colegio`: nombre del colegio asociado.
+> - `direccion`, `ano_culminado`, `fecha_nacimiento`.
+> - `sexo`, `nombre`, `apellido_paterno`, `apellido_materno`.
 
 Esquemas (Alumno):
 
 - Create: { `nombreAlumno`, `aMaterno`, `aPaterno`, `sexo`, `telefonoEstudiante`, `telefonoApoderado`,
   `fechaNacimiento`, `email`, `anoCulminado`, `Direccion`, `nroDocumento`, `idColegio` }
 - Read: los campos anteriores + `id`
+- Detalle (respuesta GET): `AlumnoDetalleRead` con los campos listados en la actualización.
 
 ---
 
@@ -142,19 +151,32 @@ Esquemas (Alumno):
 
 - Base: `/api/inscripciones`
 
-1. `GET /api/inscripciones/` → página (Page[InscripcionRead])
+1. `GET /api/inscripciones/` → página (Page[InscripcionDetalleRead])
    - Query: `offset`, `limit`, `page`, `q` (Codigo/EstadoPago/TipoPago)
 2. `POST /api/inscripciones/` → InscripcionCreate (valida FKs)
 3. `GET /api/inscripciones/buscar?dni={dni}&idCiclo={id}` → InscripcionLookupRead (404 si no existe)
+
+> **Actualización:** el `GET /api/inscripciones/` devuelve objetos enriquecidos (`InscripcionDetalleRead`) para front:
+>
+> - `codigo`, `estado_pago`, `tipo_pago` del registro.
+> - `nombre`, `apellido_paterno`, `apellido_materno` del alumno.
+> - `ciclo`, `grupo`, `clase` (nombres descriptivos).
+> - `numero_pagos`: conteo de vouchers asociados.
 
 ---
 
 ## Pagos
 
 - Base: `/api/pagos`
-- `GET /api/pagos/` → página (Page[PagoRead])
+- `GET /api/pagos/` → página (Page[PagoDetalleRead])
   - Query: `offset`, `limit`, `page`, `q` (nroVoucher/medioPago)
 - `POST /api/pagos/` → PagoCreate (requiere `idInscripcion` válido)
+
+> **Actualización:** la respuesta `GET /api/pagos/` ahora devuelve `PagoDetalleRead` con:
+>
+> - `codigo_pago`, `monto`, `fecha_pago`, `tipo_pago`.
+> - `nombre_estudiante`, `apellido_paterno`, `apellido_materno` asociados.
+> - `ciclo_pago`: nombre del ciclo al que pertenece la inscripción del pago.
 
 ---
 
@@ -244,6 +266,77 @@ Esquemas (PrePago):
 5. `GET /api/bandeja/pagos` → lista pagos pendientes
 6. `POST /api/bandeja/pagos/{pago_id}/aprobar` → aprueba pago
 7. `POST /api/bandeja/pagos/{pago_id}/rechazar` → rechaza/elimina pago
+
+---
+
+## Ubicaciones (Selects en Cascada)
+
+Endpoints optimizados para selectores dependientes (Departamento -> Provincia -> Distrito -> Colegio).
+
+1. `GET /api/departamentos/`
+
+   - Retorna todos los departamentos.
+
+2. `GET /api/provincias/`
+
+   - Query Params: `departamento_id` (int, opcional).
+   - Ejemplo: `/api/provincias/?departamento_id=15`
+
+3. `GET /api/distritos/`
+
+   - Query Params: `provincia_id` (int, opcional).
+   - Ejemplo: `/api/distritos/?provincia_id=1501`
+
+4. `GET /api/colegios/`
+   - Query Params: `distrito_id` (int, opcional).
+   - Ejemplo: `/api/colegios/?distrito_id=150101`
+
+---
+
+## Dashboard (Estadísticas y Gráficos)
+
+- Base: `/api/dashboard`
+
+1. `GET /api/dashboard/`
+   - Retorna un objeto con estadísticas generales y datos para gráficos.
+   - **Respuesta (JSON):**
+     ```json
+     {
+       "stats": {
+         "total_alumnos": 150,
+         "total_inscripciones": 120,
+         "ingresos_totales": 45000.5,
+         "pagos_pendientes": 15
+       },
+       "charts": {
+         "ingresos_por_mes": [
+           { "name": "2024-01", "value": 5000.0 },
+           { "name": "2024-02", "value": 7500.5 }
+         ],
+         "inscripciones_por_programa": [
+           {
+             "name": "Computación",
+             "value": 80
+           },
+           { "name": "Inglés", "value": 40 }
+         ],
+         "inscripciones_por_ciclo": [
+           { "name": "2024-I", "value": 60 },
+           { "name": "2024-II", "value": 60 }
+         ],
+         "estado_pagos": [
+           { "name": "Pagado", "value": 100 },
+           { "name": "Pendiente", "value": 20 }
+         ]
+       }
+     }
+     ```
+   - **Uso en Frontend (Shadcn UI Charts):**
+     - `stats`: Usar en tarjetas de KPI.
+     - `charts.ingresos_por_mes`: Usar en BarChart o LineChart. `name` es el eje X, `value` es el eje Y.
+     - `charts.inscripciones_por_programa`: Usar en PieChart o DonutChart.
+     - `charts.inscripciones_por_ciclo`: Usar en BarChart.
+     - `charts.estado_pagos`: Usar en PieChart.
 
 ---
 

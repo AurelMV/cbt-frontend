@@ -1,23 +1,15 @@
 import * as React from "react"
 import {
   IconDashboard,
-  IconDatabase,
   IconInnerShadowTop,
-  IconReport,
   IconClipboardList,
   IconCash,
   IconBook,
   IconCalendarMonth,
-  IconCheckupList,
-  IconFileAnalytics,
-  IconUserEdit,
-  IconHistory,
   IconUsers
 } from "@tabler/icons-react"
 
-import { NavDocuments } from "@/components/nav-documents"
 import { NavMain } from "@/components/nav-main"
-import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
 import {
   Sidebar,
@@ -44,17 +36,6 @@ const data = {
     { title: "Clases", url: "/admin/clases", icon: IconClipboardList },
     { title: "Grupos", url: "/admin/grupos", icon: IconUsers },
     { title: "Alumnos", url: "/admin/alumnos", icon: IconUsers },
-    { title: "Asistencias", url: "/admin/asistencias", icon: IconCheckupList },
-    { title: "Reportes", url: "/admin/reportes", icon: IconFileAnalytics },
-    { title: "Usuario", url: "/admin/usuario", icon: IconUserEdit },
-    { title: "Auditoría", url: "/admin/auditoria", icon: IconHistory },
-  ],
-  navSecondary: [
-    // Limpiado: sin atajos sin funcionalidad
-  ],
-  documents: [
-    { name: "Base de datos", url: "/admin", icon: IconDatabase },
-    { name: "Reportes", url: "/admin/reportes", icon: IconReport },
   ],
 }
 
@@ -78,8 +59,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
-        <NavDocuments items={data.documents} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={data.user} />

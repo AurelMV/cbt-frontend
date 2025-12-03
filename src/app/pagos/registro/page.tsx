@@ -87,6 +87,7 @@ export default function Page() {
   );
 
   const form = useForm<FormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(schema) as any,
     defaultValues: { dni: "", ciclo: "", banco: "" },
     mode: "onChange",
@@ -149,7 +150,7 @@ export default function Page() {
       try {
         await downloadComprobantePago(pago.id);
         toast.success("Pago registrado exitosamente");
-      } catch (err) {
+      } catch {
         toast.warning("Pago registrado, error al descargar PDF");
       }
 
@@ -165,7 +166,9 @@ export default function Page() {
       try {
         const data = await getCiclos();
         setCiclos(data);
-      } catch {}
+      } catch {
+        // ignore
+      }
     };
     load();
   }, []);
@@ -296,9 +299,9 @@ export default function Page() {
         {/* PARTE 2: FORMULARIO DE PAGO (SOLO VISIBLE SI HAY PERFIL O SIEMPRE VISIBLE PERO DESHABILITADO) */}
         <div
           className={
-            !perfil
-              ? "opacity-50 pointer-events-none grayscale transition-all duration-300"
-              : "transition-all duration-300"
+            perfil
+              ? "transition-all duration-300"
+              : "opacity-50 pointer-events-none grayscale transition-all duration-300"
           }
         >
           <form onSubmit={form.handleSubmit(onSubmit)}>
