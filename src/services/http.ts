@@ -41,7 +41,7 @@ export async function http<T>(path: string, opts?: HttpOptions) {
       if (typeof detail === "string" && detail.trim()) {
         message = detail
       }
-    } catch (e) {
+    } catch {
       // ignore error parsing
     }
 

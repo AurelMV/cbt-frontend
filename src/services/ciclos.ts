@@ -43,3 +43,8 @@ export async function crearCiclo(body: CicloCreate) {
 export async function actualizarCiclo(id: number, body: CicloUpdate) {
   return api.put<CicloRead>(`/ciclos/${id}`, body)
 }
+
+export async function getCiclosPorPrograma(programaId: number) {
+  const res = await api.get<CicloRead[] | PaginatedResponse<CicloRead>>(`/ciclos/?programa_id=${programaId}`)
+  return Array.isArray(res) ? res : res.items
+}

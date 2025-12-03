@@ -344,7 +344,7 @@ function HeroContent() {
       delay: 200,
     });
     const btns = buttonsRef.current?.querySelectorAll("a, button") ?? [];
-    if (btns && (btns as any).length !== 0) {
+    if (btns && btns.length !== 0) {
       animate(btns as unknown as Element, {
         opacity: [0, 1],
         scale: [0.92, 1],
