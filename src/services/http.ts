@@ -1,6 +1,13 @@
 import { toast } from "sonner"
 
-const BASE = import.meta.env.VITE_BASE_URL_API as string
+let envBase = import.meta.env.VITE_BASE_URL_API as string
+
+// Forzar HTTPS si estamos en producción o si la URL viene con http
+if (envBase?.startsWith("http://")) {
+  envBase = envBase.replace("http://", "https://")
+}
+
+export const BASE = envBase
 
 if (!BASE) {
   // Aviso temprano en consola si no está configurada la URL
