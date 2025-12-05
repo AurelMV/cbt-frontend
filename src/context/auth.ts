@@ -1,6 +1,5 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
-import { api } from "@/services/http"
 
 export type Role = "admin" | "docente" | "user"
 

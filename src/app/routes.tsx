@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react"
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom"
 import Providers from "./Providers"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useAuth } from "@/context/auth"
+import { useAuth, type Role } from "@/context/auth"
 import AdminLayout from "@/app/admin/layout"
 
 const LandingPage = lazy(() => import("@/app/landing/page"))
@@ -28,7 +28,7 @@ function Fallback() {
   return <div className="p-6"><Skeleton className="h-8 w-40 mb-4" /><Skeleton className="h-24 w-full" /></div>
 }
 
-function RequireRole({ roles, children }: Readonly<{ roles: Array<"admin" | "docente">; children: React.ReactNode }>) {
+function RequireRole({ roles, children }: Readonly<{ roles: Role[]; children: React.ReactNode }>) {
   const user = useAuth((s) => s.user)
   if (!user || (roles.length && !roles.includes(user.role))) {
     return <Navigate to="/login" replace />
