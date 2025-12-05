@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react"
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom"
 import Providers from "./Providers"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useAuth } from "@/context/auth"
+import { useAuth, type Role } from "@/context/auth"
 import AdminLayout from "@/app/admin/layout"
 
 const LandingPage = lazy(() => import("@/app/landing/page"))
@@ -22,12 +22,13 @@ const AdminAlumnos = lazy(() => import("@/app/admin/alumnos/page"))
 const AdminReportes = lazy(() => import("@/app/admin/reportes/page"))
 const AdminUsuario = lazy(() => import("@/app/admin/usuario/page"))
 const AdminAuditoria = lazy(() => import("@/app/admin/auditoria/page"))
+const AdminPublicidad = lazy(() => import("@/app/admin/publicidad/page"))
 
 function Fallback() {
   return <div className="p-6"><Skeleton className="h-8 w-40 mb-4" /><Skeleton className="h-24 w-full" /></div>
 }
 
-function RequireRole({ roles, children }: Readonly<{ roles: Array<"admin" | "docente">; children: React.ReactNode }>) {
+function RequireRole({ roles, children }: Readonly<{ roles: Role[]; children: React.ReactNode }>) {
   const user = useAuth((s) => s.user)
   if (!user || (roles.length && !roles.includes(user.role))) {
     return <Navigate to="/login" replace />
@@ -59,6 +60,7 @@ export function AppRoutes() {
               <Route path="reportes" element={<AdminReportes />} />
               <Route path="usuario" element={<AdminUsuario />} />
               <Route path="auditoria" element={<AdminAuditoria />} />
+              <Route path="publicidad" element={<AdminPublicidad />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

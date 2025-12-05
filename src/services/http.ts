@@ -3,9 +3,9 @@ import { toast } from "sonner"
 let envBase = import.meta.env.VITE_BASE_URL_API as string
 
 // Forzar HTTPS si estamos en producción o si la URL viene con http
-if (envBase?.startsWith("http://")) {
-  envBase = envBase.replace("http://", "https://")
-}
+// if (envBase?.startsWith("http://")) {
+//   envBase = envBase.replace("http://", "https://")
+// }
 
 export const BASE = envBase
 
@@ -31,6 +31,19 @@ export async function http<T>(path: string, opts?: HttpOptions) {
   const headers: Record<string, string> = opts?.headers ? { ...opts.headers } : {}
   // Importante para CORS: no enviar Content-Type en GET (evita preflight innecesario)
   if (hasBody) headers["Content-Type"] = "application/json"
+
+  // Inject Token
+  try {
+    const storage = localStorage.getItem("cbt-auth")
+    if (storage) {
+      const { state } = JSON.parse(storage)
+      if (state?.user?.token) {
+        headers["Authorization"] = `Bearer ${state.user.token}`
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
 
   const res = await fetch(url, {
     method,
