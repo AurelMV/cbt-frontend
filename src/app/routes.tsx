@@ -22,6 +22,7 @@ const AdminAlumnos = lazy(() => import("@/app/admin/alumnos/page"))
 const AdminReportes = lazy(() => import("@/app/admin/reportes/page"))
 const AdminUsuario = lazy(() => import("@/app/admin/usuario/page"))
 const AdminAuditoria = lazy(() => import("@/app/admin/auditoria/page"))
+const AdminPublicidad = lazy(() => import("@/app/admin/publicidad/page"))
 
 function Fallback() {
   return <div className="p-6"><Skeleton className="h-8 w-40 mb-4" /><Skeleton className="h-24 w-full" /></div>
@@ -59,6 +60,7 @@ export function AppRoutes() {
               <Route path="reportes" element={<AdminReportes />} />
               <Route path="usuario" element={<AdminUsuario />} />
               <Route path="auditoria" element={<AdminAuditoria />} />
+              <Route path="publicidad" element={<AdminPublicidad />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

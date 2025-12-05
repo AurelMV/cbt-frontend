@@ -1,7 +1,8 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
+import { api } from "@/services/http"
 
-export type Role = "admin" | "docente"
+export type Role = "admin" | "docente" | "user"
 
 export type User = {
   id: string
@@ -15,38 +16,74 @@ type State = {
   user: User | null
   login: (email: string, password: string) => Promise<User>
   logout: () => void
+  updateProfile: (data: Partial<User>) => void
 }
-
-// Cuentas de prueba (mock)
-const ACCOUNTS: Array<{ email: string; password: string; name: string; role: Role }> = [
-  { email: "admin@cbt.edu.pe", password: "Admin123*", name: "Admin CBT", role: "admin" },
-  { email: "docente@cbt.edu.pe", password: "Docente123*", name: "Docente CBT", role: "docente" },
-]
 
 export const useAuth = create<State>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       async login(email, password) {
-        // Simulación de verificación contra ACCOUNTS
-        const found = ACCOUNTS.find((a) => a.email.toLowerCase() === email.toLowerCase() && a.password === password)
-        await new Promise((r) => setTimeout(r, 400))
-        if (!found) {
-          throw new Error("Credenciales inválidas")
+        // 1. Login to get token
+        const formData = new FormData()
+        formData.append("username", email)
+        formData.append("password", password)
+        
+        // We use fetch directly here or api.post but we need form data handling
+        // api.post sends JSON by default. Let's use fetch or adjust api.
+        // Since api wrapper is simple, let's use fetch for the token endpoint which is special
+        
+        const { BASE } = await import("@/services/http")
+        const res = await fetch(`${BASE}/auth/login`, {
+          method: "POST",
+          body: formData,
+        })
+        
+        if (!res.ok) throw new Error("Credenciales inválidas")
+        
+        const tokenData = await res.json()
+        const token = tokenData.access_token
+        
+        // 2. Get User Profile
+        const userRes = await fetch(`${BASE}/users/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        
+        if (!userRes.ok) throw new Error("Error al obtener perfil")
+        
+        const userData = await userRes.json()
+        
+        // Map backend roles to frontend role
+        // Prioritize admin > docente > user
+        const roles = (userData.roles || []).map((r: { name: string }) => r.name)
+        let roleName: Role = "user"
+        
+        if (roles.includes("admin")) {
+          roleName = "admin"
+        } else if (roles.includes("docente")) {
+          roleName = "docente"
         }
+        
         const user: User = {
-          id: crypto.randomUUID(),
-          name: found.name,
-          email: found.email,
-          role: found.role,
-          token: Math.random().toString(36).slice(2),
+          id: String(userData.id),
+          name: userData.username,
+          email: userData.email,
+          role: roleName,
+          token: token,
         }
+        
         set({ user })
         return user
       },
       logout() {
         set({ user: null })
       },
+      updateProfile(data) {
+        const currentUser = get().user
+        if (currentUser) {
+          set({ user: { ...currentUser, ...data } })
+        }
+      }
     }),
     { name: "cbt-auth" }
   )
