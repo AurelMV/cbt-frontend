@@ -12,10 +12,12 @@ import {
 import { motion } from "framer-motion";
 import ProgramasGroupedSection from "@/components/sections/programas-grouped";
 import { animate, stagger } from "animejs";
+import { PublicityModal } from "@/components/publicity-modal";
 
 export default function Page() {
   return (
     <div className="min-h-svh flex flex-col bg-background text-foreground">
+      <PublicityModal />
       {/* Barra superior de contacto */}
       <div className="bg-[#7A1D1D] text-white text-xs">
         <div className="max-w-6xl mx-auto px-4 py-2 flex flex-wrap items-center gap-4 justify-between">
