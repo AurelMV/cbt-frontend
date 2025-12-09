@@ -6,7 +6,8 @@ import {
   IconCash,
   IconBook,
   IconCalendarMonth,
-  IconUsers
+  IconUsers,
+  IconSpeakerphone
 } from "@tabler/icons-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -36,6 +37,7 @@ const data = {
     { title: "Clases", url: "/admin/clases", icon: IconClipboardList },
     { title: "Grupos", url: "/admin/grupos", icon: IconUsers },
     { title: "Alumnos", url: "/admin/alumnos", icon: IconUsers },
+    { title: "Publicidad", url: "/admin/publicidad", icon: IconSpeakerphone },
   ],
 }
 

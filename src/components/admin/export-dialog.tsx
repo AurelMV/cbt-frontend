@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { BASE } from "@/services/http";
 
 const AVAILABLE_COLUMNS = [
   { id: "Codigo", label: "Código" },
@@ -79,7 +80,7 @@ export function ExportDialog({
       
       // For now, let's try constructing the URL with the base API URL.
       // If the API is on the same domain/proxy:
-      const fullUrl = `${import.meta.env.VITE_API_URL || "http://localhost:8000/api"}${url}`;
+      const fullUrl = `${BASE}${url}`;
       
       // Using a hidden link to trigger download
       const link = document.createElement('a');
